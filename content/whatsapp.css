@@ -1,0 +1,121 @@
+#ctwa-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: transparent;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.ctwa-overlay__card {
+  pointer-events: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  max-width: 380px;
+  width: calc(100vw - 32px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  border: 1px solid #e0e0e0;
+}
+
+.ctwa-overlay__card--floating {
+  position: fixed;
+  margin: 0;
+}
+
+.ctwa-overlay__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  color: #111;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.ctwa-overlay__header:active {
+  cursor: grabbing;
+}
+
+.ctwa-overlay__icon {
+  font-size: 24px;
+}
+
+.ctwa-overlay__step {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #25d366;
+}
+
+.ctwa-overlay__status {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.ctwa-overlay__event-date {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a73e8;
+  line-height: 1.4;
+}
+
+.ctwa-overlay__event-date[hidden] {
+  display: none;
+}
+
+.ctwa-overlay__details {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #666;
+  font-family: "Roboto Mono", monospace;
+}
+
+.ctwa-overlay--error .ctwa-overlay__step {
+  color: #c62828;
+}
+
+.ctwa-overlay--error .ctwa-overlay__status {
+  color: #c62828;
+}
+
+.ctwa-overlay__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ctwa-overlay__btn {
+  appearance: none;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #f5f5f5;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ctwa-overlay__btn:hover {
+  background: #eee;
+}
+
+.ctwa-overlay__btn--primary {
+  background: #25d366;
+  border-color: #25d366;
+  color: #fff;
+}
+
+.ctwa-overlay__btn--primary:hover {
+  background: #1da851;
+}

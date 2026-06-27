@@ -1,0 +1,169 @@
+.ctwa-widget {
+  margin: 8px 16px 4px;
+  position: relative;
+}
+
+.ctwa-trigger {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: background 0.15s, transform 0.1s;
+}
+
+.ctwa-trigger:hover {
+  background: #1da851;
+}
+
+.ctwa-trigger:active {
+  transform: scale(0.95);
+}
+
+.ctwa-banner {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+  border: 1px solid #a5d6a7;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  color: #1b5e20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ctwa-banner--hidden {
+  display: none;
+}
+
+.ctwa-banner__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.ctwa-banner__title {
+  font-size: 13px;
+}
+
+.ctwa-banner__close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #33691e;
+  font-size: 20px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ctwa-banner__close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.ctwa-banner__hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #388e3c;
+}
+
+.ctwa-banner__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ctwa-banner__row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #c8e6c9;
+}
+
+.ctwa-banner__row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.ctwa-banner__phone {
+  font-family: "Roboto Mono", monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.ctwa-banner__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctwa-banner__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #33691e;
+  margin-top: 4px;
+}
+
+.ctwa-banner__select,
+.ctwa-banner__input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #a5d6a7;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: #1b5e20;
+  box-sizing: border-box;
+}
+
+.ctwa-banner__select:focus,
+.ctwa-banner__input:focus {
+  outline: none;
+  border-color: #25d366;
+  box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.2);
+}
+
+.ctwa-banner__btn {
+  appearance: none;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 16px;
+  margin-top: 6px;
+  background: #25d366;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  align-self: flex-start;
+}
+
+.ctwa-banner__btn:hover:not(:disabled) {
+  background: #1da851;
+}
+
+.ctwa-banner__btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ctwa-banner__btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
