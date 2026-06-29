@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_ID = "1.9.5-wa";
+  const SCRIPT_ID = "1.9.9-wa";
   if (window.__CTWA_WA_SCRIPT__ === SCRIPT_ID) return;
   window.__CTWA_WA_SCRIPT__ = SCRIPT_ID;
 
@@ -8,6 +8,7 @@
   const MAX_READY_ATTEMPTS = 80;
 
   let overlayEl = null;
+  let overlayPosition = null;
   let automationDone = false;
   let automationRunning = false;
 
@@ -180,19 +181,26 @@
       'input[aria-label="Search name or number"]',
       'input[placeholder="Rechercher un nom ou un numéro"]',
       'input[placeholder="Search name or number"]',
+      '[data-testid="new-chat-drawer"] input[type="text"]',
+      '[data-testid="new-chat-drawer"] [contenteditable="true"]',
     ];
     const inputs = [];
-    for (const sel of selectors) {
-      document.querySelectorAll(sel).forEach((el) => {
-        if (isVisible(el)) inputs.push(el);
-      });
+    const drawer = getNewChatDrawer();
+    const roots = drawer ? [drawer, document] : [document];
+
+    for (const root of roots) {
+      for (const sel of selectors) {
+        root.querySelectorAll(sel).forEach((el) => {
+          if (isVisible(el) && !inputs.includes(el)) inputs.push(el);
+        });
+      }
     }
     if (!inputs.length) return null;
 
     if (preferredQuery) {
       const queryDigits = phoneDigits(preferredQuery);
       const matching = inputs.find((input) => {
-        const valueDigits = phoneDigits(input.value);
+        const valueDigits = phoneDigits(getSearchInputDisplayValue(input));
         return (
           valueDigits &&
           (valueDigits === queryDigits ||
@@ -203,31 +211,84 @@
       if (matching) return matching;
     }
 
-    const withValue = inputs.find((input) => input.value?.trim());
+    const withValue = inputs.find((input) =>
+      getSearchInputDisplayValue(input)
+    );
     if (withValue) return withValue;
 
     return inputs[inputs.length - 1];
   }
 
-  function setInputValue(input, value) {
+  async function clearInputField(input) {
+    if (!input) return;
     input.focus();
+    await sleep(50);
+
+    const editable =
+      input.isContentEditable || input.getAttribute?.("contenteditable") === "true"
+        ? input
+        : input.closest?.('[contenteditable="true"]');
+
+    if (editable) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editable);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.execCommand("selectAll", false, null);
+      document.execCommand("delete", false, null);
+    } else {
+      input.select?.();
+      document.execCommand("selectAll", false, null);
+      document.execCommand("delete", false, null);
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      if (nativeSetter) nativeSetter.call(input, "");
+      else input.value = "";
+    }
+
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await sleep(80);
+  }
+
+  async function clearAndSetInputValue(input, value) {
+    if (!input) return;
+    await clearInputField(input);
+    document.execCommand("insertText", false, value);
     const nativeSetter = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value"
     )?.set;
-    if (nativeSetter) nativeSetter.call(input, value);
-    else input.value = value;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
+    if (!input.isContentEditable && !input.closest?.('[contenteditable="true"]')) {
+      if (nativeSetter) nativeSetter.call(input, value);
+      else input.value = value;
+    }
+    input.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        data: value,
+        inputType: "insertText",
+      })
+    );
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   async function fillChatSearchInput(input, query) {
+    if (!input || !query) return;
     input.focus();
     await sleep(100);
-    input.select?.();
-    document.execCommand("selectAll", false, null);
+    await clearInputField(input);
     document.execCommand("insertText", false, query);
-    setInputValue(input, query);
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    if (!input.isContentEditable && !input.closest?.('[contenteditable="true"]')) {
+      if (nativeSetter) nativeSetter.call(input, query);
+      else input.value = query;
+    }
     input.dispatchEvent(
       new InputEvent("input", {
         bubbles: true,
@@ -240,11 +301,45 @@
 
   function getSearchInputDisplayValue(input) {
     if (!input) return "";
-    return (input.value || input.getAttribute("value") || "").trim();
+    const direct = (input.value || input.getAttribute("value") || "").trim();
+    if (direct) return direct;
+    if (input.isContentEditable) return (input.textContent || "").trim();
+    const editable = input.closest('[contenteditable="true"]');
+    if (editable) return (editable.textContent || "").trim();
+    const drawer = input.closest('[data-testid="new-chat-drawer"]');
+    if (drawer) {
+      const drawerInput = drawer.querySelector("input");
+      if (drawerInput?.value?.trim()) return drawerInput.value.trim();
+    }
+    return "";
   }
 
   function normalizeName(str) {
     return (str || "").toLowerCase().replace(/[\[\]]/g, "").trim();
+  }
+
+  function nameMatchesContact(text, contact) {
+    const hay = normalizeName(text);
+    if (!hay) return false;
+
+    for (const name of contact.searchNames || []) {
+      const candidate = normalizeName(name);
+      if (!candidate) continue;
+      if (
+        hay === candidate ||
+        hay.includes(candidate) ||
+        candidate.includes(hay)
+      ) {
+        return true;
+      }
+    }
+
+    const first = normalizeName(contact.firstName);
+    const last = normalizeName(contact.lastName);
+    if (!first && !last) return false;
+    if (first && first.length >= 2 && !hay.includes(first)) return false;
+    if (last && last.length >= 2 && !hay.includes(last)) return false;
+    return !!(first || last);
   }
 
   function looksLikePhone(text) {
@@ -278,39 +373,121 @@
     return findChatSearchInput(phoneQuery);
   }
 
-  function findContactSearchRow(contact) {
+  function getNewChatDrawer() {
+    return document.querySelector('[data-testid="new-chat-drawer"]');
+  }
+
+  function isNewChatSearchActive(contact) {
+    const queryDigits = phoneDigits(contact.phone || contact.rawPhone);
+    if (queryDigits.length < 9) return false;
+
+    const drawer = getNewChatDrawer();
+    if (
+      drawer &&
+      (findPhoneRowInDrawer(drawer, contact) ||
+        findNameRowInDrawer(drawer, contact))
+    ) {
+      return true;
+    }
+
+    const input = getNewChatSearchInput(contact);
+    if (!input) return false;
+    const inputDigits = phoneDigits(getSearchInputDisplayValue(input));
+    if (!inputDigits) return false;
+    return (
+      inputDigits === queryDigits ||
+      inputDigits.endsWith(queryDigits) ||
+      queryDigits.endsWith(inputDigits)
+    );
+  }
+
+  function getDrawerSearchRows(drawer) {
+    if (!drawer) return [];
+    return [...drawer.querySelectorAll('[data-testid="cell-frame-container"]')].filter(
+      isVisible
+    );
+  }
+
+  function findPhoneRowInDrawer(drawer, contact) {
+    if (!drawer || !contact) return null;
+    for (const row of getDrawerSearchRows(drawer)) {
+      const text = getSearchResultTitleText(row);
+      if (phoneMatchesContact(text, contact)) return row;
+    }
+    return null;
+  }
+
+  function findNameRowInDrawer(drawer, contact) {
+    if (!drawer || !contact) return null;
+    for (const row of getDrawerSearchRows(drawer)) {
+      const text = getSearchResultTitleText(row);
+      if (
+        !looksLikePhone(text) &&
+        text.length >= 2 &&
+        nameMatchesContact(text, contact)
+      ) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  function findExistingNameRowForPhoneSearch(drawer, contact) {
+    if (!drawer || !contact || !isNewChatSearchActive(contact)) return null;
+
+    const rows = getDrawerSearchRows(drawer);
+    if (!rows.length || rows.length > 4) return null;
+
+    for (const row of rows) {
+      const text = getSearchResultTitleText(row);
+      if (!looksLikePhone(text) && text.length >= 2) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  function isDrawerSearchFiltered(drawer, contact) {
+    if (!drawer) return false;
+    if (
+      findPhoneRowInDrawer(drawer, contact) ||
+      findNameRowInDrawer(drawer, contact) ||
+      findExistingNameRowForPhoneSearch(drawer, contact)
+    ) {
+      return true;
+    }
+
+    const rows = getDrawerSearchRows(drawer);
+    if (!rows.length) return false;
+    if (rows.length <= 4) return isNewChatSearchActive(contact);
+
+    const drawerText = (drawer.textContent || "").toLowerCase();
+    return (
+      drawerText.includes("ne sont pas dans vos contacts") ||
+      drawerText.includes("not in your contacts") ||
+      drawerText.includes("aucun résultat") ||
+      drawerText.includes("no results")
+    );
+  }
+
+  function findContactSearchRow(contact, options = {}) {
+    const { requireFiltered = true } = options;
     const targetDigits = phoneDigits(contact.phone || contact.rawPhone);
     if (targetDigits.length < 9) return null;
 
-    const drawer = document.querySelector('[data-testid="new-chat-drawer"]');
-    const scopes = [
-      drawer,
-      document.querySelector("#pane-side"),
-      document,
-    ].filter(Boolean);
+    const drawer = getNewChatDrawer();
+    if (!drawer || !isNewChatSearchActive(contact)) return null;
+    if (requireFiltered && !isDrawerSearchFiltered(drawer, contact)) return null;
 
-    let nameRow = null;
-    for (const scope of scopes) {
-      for (const row of scope.querySelectorAll(
-        '[data-testid="cell-frame-container"]'
-      )) {
-        if (!isVisible(row)) continue;
-        const text = getSearchResultTitleText(row);
-        if (phoneMatchesContact(text, contact)) {
-          return { row, existing: false };
-        }
-        if (
-          !nameRow &&
-          drawer &&
-          scope === drawer &&
-          !looksLikePhone(text) &&
-          text.length >= 2
-        ) {
-          nameRow = row;
-        }
-      }
-    }
+    const phoneRow = findPhoneRowInDrawer(drawer, contact);
+    if (phoneRow) return { row: phoneRow, existing: false };
+
+    const nameRow = findNameRowInDrawer(drawer, contact);
     if (nameRow) return { row: nameRow, existing: true };
+
+    const existingByPhone = findExistingNameRowForPhoneSearch(drawer, contact);
+    if (existingByPhone) return { row: existingByPhone, existing: true };
+
     return null;
   }
 
@@ -387,6 +564,10 @@
     showOverlay(contact, "Tentative clavier (↓ + Entrée)…", {
       step: "Étape 3/6 — Ouverture",
     });
+    const drawer = getNewChatDrawer();
+    if (!drawer || !isDrawerSearchFiltered(drawer, contact)) {
+      return false;
+    }
     await openSearchResultViaKeyboard(contact);
     await sleep(1200);
     return !!(await waitForPhoneChatHeader(contact, 15));
@@ -509,23 +690,13 @@
   }
 
   async function clearLexicalField(el) {
-    el.focus();
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    document.execCommand("selectAll", false, null);
-    document.execCommand("delete", false, null);
-    await sleep(80);
+    await clearInputField(el);
   }
 
   async function fillLexicalField(el, text) {
     if (!el || !text) return false;
 
     const expected = text.trim();
-    if (getLexicalFieldText(el) === expected) return true;
-
     simulateClick(el);
     el.focus();
     await sleep(100);
@@ -602,7 +773,7 @@
     );
 
     if (countrySearch) {
-      setInputValue(countrySearch, countryCode);
+      await clearAndSetInputValue(countrySearch, countryCode);
       await sleep(600);
     }
 
@@ -654,11 +825,7 @@
       String(contact.phone || "").replace(new RegExp("^" + countryCode), "");
 
     if (phoneField && nationalNumber) {
-      const currentPhone = phoneDigits(phoneField.value);
-      const expectedPhone = phoneDigits(nationalNumber);
-      if (currentPhone !== expectedPhone) {
-        setInputValue(phoneField, nationalNumber);
-      }
+      await clearAndSetInputValue(phoneField, nationalNumber);
       filled = true;
     }
 
@@ -827,13 +994,26 @@
     return contact.eventDate ? `RDV : ${contact.eventDate}` : "";
   }
 
+  function applyOverlayPosition(card) {
+    card.classList.add("ctwa-overlay__card--floating");
+    if (overlayPosition) {
+      card.style.left = `${overlayPosition.left}px`;
+      card.style.top = `${overlayPosition.top}px`;
+      card.style.right = "auto";
+    } else {
+      card.style.left = "auto";
+      card.style.top = "24px";
+      card.style.right = "24px";
+    }
+  }
+
   function attachOverlayDrag(card, handle) {
     if (handle.dataset.ctwaDrag) return;
     handle.dataset.ctwaDrag = "1";
     let drag = null;
 
     handle.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button")) return;
+      if (e.target.closest("button, a, input, textarea, select")) return;
       e.preventDefault();
       const rect = card.getBoundingClientRect();
       drag = {
@@ -841,16 +1021,19 @@
         offsetX: e.clientX - rect.left,
         offsetY: e.clientY - rect.top,
       };
-      card.classList.add("ctwa-overlay__card--floating");
       card.style.left = `${rect.left}px`;
       card.style.top = `${rect.top}px`;
+      card.style.right = "auto";
       handle.setPointerCapture(e.pointerId);
     });
 
     handle.addEventListener("pointermove", (e) => {
       if (!drag || drag.pointerId !== e.pointerId) return;
-      card.style.left = `${e.clientX - drag.offsetX}px`;
-      card.style.top = `${e.clientY - drag.offsetY}px`;
+      const left = Math.max(8, e.clientX - drag.offsetX);
+      const top = Math.max(8, e.clientY - drag.offsetY);
+      card.style.left = `${left}px`;
+      card.style.top = `${top}px`;
+      overlayPosition = { left, top };
     });
 
     const endDrag = (e) => {
@@ -889,8 +1072,8 @@
       document.body.appendChild(overlayEl);
 
       const card = overlayEl.querySelector(".ctwa-overlay__card");
-      const header = overlayEl.querySelector(".ctwa-overlay__header");
-      attachOverlayDrag(card, header);
+      applyOverlayPosition(card);
+      attachOverlayDrag(card, card);
 
       overlayEl
         .querySelector('[data-action="dismiss"]')
@@ -927,6 +1110,9 @@
     overlayEl.querySelector('[data-action="retry"]').style.display = showRetry
       ? "inline-block"
       : "none";
+
+    const card = overlayEl.querySelector(".ctwa-overlay__card");
+    if (card) applyOverlayPosition(card);
   }
 
   async function waitForWhatsAppReady() {
@@ -982,12 +1168,17 @@
     if (!searchResult) {
       automationDone = true;
       const searchInput = getNewChatSearchInput(contact);
-      const visibleRows = [...document.querySelectorAll(
-        '[data-testid="cell-frame-container"]'
-      )].filter(isVisible).length;
+      const drawer = getNewChatDrawer();
+      const drawerRows = drawer ? getDrawerSearchRows(drawer) : [];
+      const visibleRows = drawerRows.length;
+      const preview = drawerRows
+        .slice(0, 3)
+        .map((row) => getSearchResultTitleText(row))
+        .filter(Boolean)
+        .join(" · ");
       showOverlay(
         contact,
-        `Numéro introuvable dans la recherche (lignes visibles: ${visibleRows}, champ: « ${getSearchInputDisplayValue(searchInput) || "?"} »).`,
+        `Numéro introuvable dans la recherche (lignes tiroir: ${visibleRows}, champ: « ${getSearchInputDisplayValue(searchInput) || "?"} »${preview ? `, résultats: « ${preview} »` : ""}).`,
         { isError: true, step: "Numéro introuvable", showRetry: true }
       );
       return;

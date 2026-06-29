@@ -2,9 +2,6 @@
   position: fixed;
   inset: 0;
   z-index: 999999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   pointer-events: none;
   background: transparent;
   font-family: "Segoe UI", system-ui, sans-serif;
@@ -19,6 +16,12 @@
   width: calc(100vw - 32px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   border: 1px solid #e0e0e0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ctwa-overlay__card:active {
+  cursor: grabbing;
 }
 
 .ctwa-overlay__card--floating {
@@ -33,13 +36,16 @@
   margin-bottom: 12px;
   font-size: 16px;
   color: #111;
-  cursor: grab;
   user-select: none;
-  touch-action: none;
 }
 
-.ctwa-overlay__header:active {
-  cursor: grabbing;
+.ctwa-overlay__header::after {
+  content: "⋮⋮";
+  margin-left: auto;
+  font-size: 12px;
+  letter-spacing: -2px;
+  color: #999;
+  line-height: 1;
 }
 
 .ctwa-overlay__icon {
@@ -93,6 +99,7 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  cursor: default;
 }
 
 .ctwa-overlay__btn {
