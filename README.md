@@ -55,6 +55,22 @@ CalendarToWA/
 
 Rechargez l’extension sur `chrome://extensions/` après chaque modification de code.
 
+## Publication Chrome Web Store
+
+Même infrastructure que [calendly_to_gsheet](https://github.com/BAVASAK/calendly_to_gsheet) et [Alegria_G_Sheet](https://github.com/BAVASAK/Alegria_G_Sheet) :
+
+```bash
+npm run package:chrome-store              # dist/CalendarToWA-chrome-store-<version>.zip
+npm run publish:chrome-store              # upload brouillon (API)
+npm run publish:chrome-store:release      # upload + soumission examen
+```
+
+**Première publication** : upload manuel du zip dans `store/release/<version>/` — voir [`store/CHROME_WEB_STORE.md`](store/CHROME_WEB_STORE.md) et [`store/release/README.md`](store/release/README.md).
+
+**Automatique (GitHub Actions)** : secrets `CWS_*` via `./scripts/setup-github-cws-secrets.sh`, puis tag `v*` ou workflow « Publish to Chrome Web Store ».
+
+Credentials OAuth : réutiliser le projet Google Cloud des autres extensions (`.env.chrome-store.example`).
+
 ## Licence
 
 MIT

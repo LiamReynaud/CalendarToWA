@@ -1,5 +1,9 @@
 .DS_Store
 .env
 .env.*
+!.env.chrome-store.example
 node_modules/
+dist/
 .playwright-mcp/
+.env.chrome-store
+.venv-compose/
