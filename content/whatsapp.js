@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_ID = "1.9.9-wa";
+  const SCRIPT_ID = "1.9.10-wa";
   if (window.__CTWA_WA_SCRIPT__ === SCRIPT_ID) return;
   window.__CTWA_WA_SCRIPT__ = SCRIPT_ID;
 
@@ -685,26 +685,131 @@
     );
   }
 
+  function getLexicalEditableRoot(el) {
+    if (!el) return null;
+    if (el.getAttribute?.("contenteditable") === "true") return el;
+    return el.querySelector?.('[contenteditable="true"]') || el;
+  }
+
   function getLexicalFieldText(el) {
-    return (el.textContent || "").replace(/\u200B/g, "").trim();
+    const root = getLexicalEditableRoot(el);
+    return (root?.textContent || "").replace(/\u200B/g, "").trim();
+  }
+
+  function selectAllInElement(el) {
+    const root = getLexicalEditableRoot(el);
+    if (!root) return;
+    root.focus();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(root);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.execCommand("selectAll", false, null);
+  }
+
+  async function dispatchSelectAll(el) {
+    const root = getLexicalEditableRoot(el);
+    if (!root) return;
+    const isMac = /Mac|iPhone|iPad/i.test(navigator.platform);
+    for (const type of ["keydown", "keyup"]) {
+      root.dispatchEvent(
+        new KeyboardEvent(type, {
+          key: "a",
+          code: "KeyA",
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: !isMac,
+          metaKey: isMac,
+        })
+      );
+    }
+  }
+
+  async function dispatchBackspace(el) {
+    const root = getLexicalEditableRoot(el);
+    if (!root) return;
+    for (const type of ["keydown", "keyup"]) {
+      root.dispatchEvent(
+        new KeyboardEvent(type, {
+          key: "Backspace",
+          code: "Backspace",
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    }
   }
 
   async function clearLexicalField(el) {
-    await clearInputField(el);
+    const root = getLexicalEditableRoot(el);
+    if (!root) return;
+
+    simulateClick(root);
+    root.focus();
+    await sleep(80);
+
+    for (let pass = 0; pass < 4; pass++) {
+      selectAllInElement(root);
+      document.execCommand("insertText", false, "");
+      await sleep(40);
+      if (!getLexicalFieldText(root)) break;
+
+      selectAllInElement(root);
+      document.execCommand("delete", false, null);
+      await sleep(40);
+      if (!getLexicalFieldText(root)) break;
+
+      await dispatchSelectAll(root);
+      await dispatchBackspace(root);
+      await sleep(40);
+      if (!getLexicalFieldText(root)) break;
+    }
+
+    for (let i = 0; i < 80 && getLexicalFieldText(root); i++) {
+      selectAllInElement(root);
+      document.execCommand("delete", false, null);
+      await dispatchBackspace(root);
+      await sleep(20);
+    }
+
+    root.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" })
+    );
+    await sleep(60);
   }
 
   async function fillLexicalField(el, text) {
     if (!el || !text) return false;
 
     const expected = text.trim();
-    simulateClick(el);
-    el.focus();
-    await sleep(100);
-    await clearLexicalField(el);
-    document.execCommand("insertText", false, expected);
-    await sleep(120);
-    el.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
-    return getLexicalFieldText(el) === expected;
+    const root = getLexicalEditableRoot(el);
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      simulateClick(root);
+      root.focus();
+      await sleep(100);
+      await clearLexicalField(root);
+
+      if (getLexicalFieldText(root)) {
+        await sleep(80);
+        continue;
+      }
+
+      selectAllInElement(root);
+      document.execCommand("insertText", false, expected);
+      await sleep(120);
+      root.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+
+      const actual = getLexicalFieldText(root);
+      if (actual === expected) return true;
+      if (actual.endsWith(expected) && actual.length > expected.length) {
+        await clearLexicalField(root);
+        continue;
+      }
+    }
+
+    return getLexicalFieldText(root) === expected;
   }
 
   async function waitForContactForm() {
