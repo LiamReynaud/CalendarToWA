@@ -1,0 +1,26 @@
+---
+description: Versionnement A.B.C — OBLIGATOIRE en fin de tâche code
+alwaysApply: true
+---
+
+# Versionnement — CalendarToWA (obligatoire)
+
+Skill global : `~/.cursor/skills/versioning-abc/SKILL.md`
+
+## Règle immuable
+
+| Quand | Action |
+|-------|--------|
+| Code modifié (local) | **+C** → `npm run version:bump` |
+| Déploiement Chrome Web Store | **+B**, C=0 → `npm run version:bump:cws` |
+| Majeur | **+A** → `npm run version:bump:major` (demande explicite) |
+
+## Fin de tâche — checklist OBLIGATOIRE
+
+Si tu modifies `content/`, `background.js`, `popup/`, `lib/` :
+
+1. `npm run version:bump` (sauf déploiement store → `version:bump:cws`)
+2. `npm run check:versions` — doit passer
+3. **Ne pas terminer** si check échoue ou si version non bumpée
+
+La tâche est **INCOMPLÈTE** sans bump +C minimum.

@@ -1,9 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Calendar to WhatsApp",
-  "version": "1.9.10",
+  "version": "1.10.0",
   "description": "Détecte les numéros de téléphone dans Google Calendar et propose de créer un contact sur WhatsApp Web.",
-  "permissions": ["storage", "clipboardWrite", "tabs", "scripting"],
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "https://calendar.google.com/*",
     "https://web.whatsapp.com/*"
@@ -22,15 +27,29 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://calendar.google.com/*"],
-      "js": ["lib/phone-utils.js", "content/calendar.js"],
-      "css": ["content/calendar.css"],
+      "matches": [
+        "https://calendar.google.com/*"
+      ],
+      "js": [
+        "lib/phone-utils.js",
+        "content/calendar.js"
+      ],
+      "css": [
+        "content/calendar.css"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "js": ["lib/phone-utils.js", "content/whatsapp.js"],
-      "css": ["content/whatsapp.css"],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "lib/phone-utils.js",
+        "content/whatsapp.js"
+      ],
+      "css": [
+        "content/whatsapp.css"
+      ],
       "run_at": "document_idle"
     }
   ]

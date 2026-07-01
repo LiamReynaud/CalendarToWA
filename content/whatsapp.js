@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_ID = "1.9.10-wa";
+  const SCRIPT_ID = "1.10.0-wa";
   if (window.__CTWA_WA_SCRIPT__ === SCRIPT_ID) return;
   window.__CTWA_WA_SCRIPT__ = SCRIPT_ID;
 

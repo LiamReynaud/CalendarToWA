@@ -1,10 +1,14 @@
 {
   "name": "calendar-to-wa",
-  "version": "1.9.10",
+  "version": "1.10.0",
   "description": "Extension Chrome — Google Calendar → WhatsApp Web",
   "private": true,
   "license": "MIT",
   "scripts": {
+    "check:versions": "node scripts/check-versions.mjs",
+    "version:bump": "node scripts/bump-version.mjs patch",
+    "version:bump:cws": "node scripts/bump-version.mjs cws",
+    "version:bump:major": "node scripts/bump-version.mjs major",
     "package:chrome-store": "node scripts/package-chrome-store.mjs",
     "publish:chrome-store": "bash scripts/publish-chrome-store.sh upload",
     "publish:chrome-store:release": "bash scripts/publish-chrome-store.sh publish"

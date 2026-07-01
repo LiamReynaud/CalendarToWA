@@ -366,7 +366,7 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "ctwa-banner__btn";
-    btn.textContent = "Créer le contact";
+    btn.textContent = "Créer ou ouvrir le contact";
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
 
@@ -496,7 +496,7 @@
 
     setTimeout(() => {
       btn.disabled = false;
-      btn.textContent = "Créer le contact";
+      btn.textContent = "Créer ou ouvrir le contact";
       scanPaused = false;
     }, 1500);
   }
