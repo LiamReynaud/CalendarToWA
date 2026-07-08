@@ -59,6 +59,40 @@ input:focus {
   line-height: 1.4;
 }
 
+.toggles {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.toggles legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #444;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.toggle:first-of-type {
+  margin-top: 4px;
+}
+
+.toggle input {
+  flex: none;
+  width: auto;
+  margin: 0;
+  accent-color: #25d366;
+}
+
 button {
   width: 100%;
   padding: 10px;

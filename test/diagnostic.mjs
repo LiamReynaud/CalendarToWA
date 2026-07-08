@@ -12,7 +12,7 @@ globalThis.window = globalThis;
 const phoneUtilsSrc = readFileSync(join(__dirname, "../lib/phone-utils.js"), "utf8");
 eval(phoneUtilsSrc);
 
-const { extractPhones, normalizeForWhatsApp, extractAttendeeNames } = globalThis.CalendarToWA;
+const { extractPhones, normalizeForWhatsApp, extractAttendeeNames, extractPipedriveContacts, extractPipedriveDealName } = globalThis.CalendarToWA;
 
 const SAMPLES = {
   ybs_calendly: `Aina Rajaonarivony et Renaud YBS
@@ -27,6 +27,11 @@ Rejoindre par téléphone
 
   no_phone: `Réunion interne
 Sans numéro de contact`,
+
+  pipedrive: `visio 2
+Deal: Cris
+Participants:
+Contact: Cris, Phone: 33613424420`,
 };
 
 console.log("=== extractPhones (excludeMeetingDialIn: true) ===\n");
@@ -75,3 +80,11 @@ for (const [name, title] of Object.entries(titleSamples)) {
   const names = extractAttendeeNames(title, "");
   console.log(`  ${name}: ${JSON.stringify(names)}`);
 }
+
+console.log("\n=== Pipedrive sync (Contact / Phone) ===\n");
+const pd = SAMPLES.pipedrive;
+console.log(`  phones: ${JSON.stringify(extractPhones(pd, { excludeMeetingDialIn: true, defaultCountryCode: "33" }))}`);
+console.log(`  names: ${JSON.stringify(extractAttendeeNames("visio 2", pd))}`);
+console.log(`  pipedrive: ${JSON.stringify(extractPipedriveContacts(pd))}`);
+console.log(`  deal name: ${JSON.stringify(extractPipedriveDealName(pd))}`);
+console.log(`  widget would show: ${extractPhones(pd, { excludeMeetingDialIn: true, defaultCountryCode: "33" }).length > 0 ? "YES" : "NO"}`);

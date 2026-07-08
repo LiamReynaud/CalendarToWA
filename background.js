@@ -112,6 +112,103 @@ async function triggerAutomation(tabId, contact) {
   return false;
 }
 
+async function findPipedriveTab() {
+  const tabs = await chrome.tabs.query({ url: "https://*.pipedrive.com/*" });
+  if (tabs.length === 0) return null;
+  tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  return tabs[0];
+}
+
+async function pingPipedriveTab(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "CTWA_PIPEDRIVE_PING",
+    });
+    return response?.pong === true;
+  } catch {
+    return false;
+  }
+}
+
+async function injectPipedriveScripts(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content/pipedrive.js"],
+  });
+}
+
+async function ensurePipedriveScript(tabId) {
+  if (await pingPipedriveTab(tabId)) return true;
+
+  try {
+    await injectPipedriveScripts(tabId);
+  } catch {
+    return false;
+  }
+
+  for (let i = 0; i < 15; i++) {
+    await sleep(200);
+    if (await pingPipedriveTab(tabId)) return true;
+  }
+  return false;
+}
+
+async function fillPipedriveSearch(tabId, query) {
+  for (let i = 0; i < 12; i++) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: "FILL_PIPEDRIVE_SEARCH",
+        query,
+      });
+      if (response?.ok) return true;
+    } catch {
+      await sleep(300);
+    }
+  }
+  return false;
+}
+
+async function openOrReusePipedriveTab(searchQuery) {
+  const existing = await findPipedriveTab();
+  let tabId;
+  let reused = false;
+
+  if (existing?.id) {
+    tabId = await focusTab(existing);
+    reused = true;
+    await sleep(600);
+  } else {
+    const tab = await chrome.tabs.create({
+      url: "https://app.pipedrive.com/",
+      active: true,
+    });
+    tabId = tab.id;
+    await waitForTabLoad(tabId);
+    await sleep(1500);
+  }
+
+  if (!(await ensurePipedriveScript(tabId))) {
+    if (reused) {
+      await reloadAndWait(tabId);
+      await sleep(800);
+    }
+    if (!(await ensurePipedriveScript(tabId))) {
+      return { tabId, reused, filled: false };
+    }
+  }
+
+  const filled = await fillPipedriveSearch(tabId, searchQuery);
+  if (!filled && reused) {
+    await sleep(800);
+    return {
+      tabId,
+      reused,
+      filled: await fillPipedriveSearch(tabId, searchQuery),
+    };
+  }
+  return { tabId, reused, filled };
+}
+
 async function openOrReuseWhatsAppTab() {
   const contact = await getPendingContact();
   const existing = await findWhatsAppTab();
@@ -155,6 +252,31 @@ async function openOrReuseWhatsAppTab() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "SAVE_SETTINGS") {
+    const {
+      defaultCountryCode = "33",
+      enableWhatsApp = true,
+      enablePipedrive = false,
+    } = message.payload || {};
+    chrome.storage.sync.set(
+      {
+        defaultCountryCode,
+        enableWhatsApp,
+        enablePipedrive,
+      },
+      () => sendResponse({ ok: !chrome.runtime.lastError })
+    );
+    return true;
+  }
+
+  if (message.type === "OPEN_PIPEDRIVE_SEARCH") {
+    const { query } = message.payload || {};
+    openOrReusePipedriveTab(query || "")
+      .then((result) => sendResponse({ ok: result.filled, ...result }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+
   if (message.type === "OPEN_WHATSAPP_CONTACT") {
     const {
       phone,

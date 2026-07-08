@@ -29,8 +29,17 @@
         78 → +33…).
       </p>
 
-      <button type="button" id="saveBtn">Enregistrer</button>
-      <p id="status" class="status" hidden></p>
+      <fieldset class="toggles">
+        <legend>Boutons sur Google Calendar</legend>
+        <label class="toggle">
+          <input type="checkbox" id="enableWhatsApp" />
+          WhatsApp
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="enablePipedrive" />
+          Pipedrive
+        </label>
+      </fieldset>
     </main>
     <script src="popup.js"></script>
   </body>

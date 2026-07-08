@@ -3,6 +3,12 @@
   position: relative;
 }
 
+.ctwa-triggers {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ctwa-trigger {
   appearance: none;
   display: inline-flex;
@@ -20,8 +26,31 @@
   transition: background 0.15s, transform 0.1s;
 }
 
-.ctwa-trigger:hover {
+.ctwa-trigger--wa {
+  background: #25d366;
+  color: #fff;
+}
+
+.ctwa-trigger--wa:hover {
   background: #1da851;
+}
+
+.ctwa-trigger--pipedrive {
+  background: #017737;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ctwa-trigger--pipedrive img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.ctwa-trigger--pipedrive:hover {
+  background: #015c2b;
 }
 
 .ctwa-trigger:active {
@@ -140,6 +169,15 @@
   box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.2);
 }
 
+.ctwa-banner__btn--pipedrive {
+  background: #017737;
+  margin-top: 0;
+}
+
+.ctwa-banner__btn--pipedrive:hover:not(:disabled) {
+  background: #015c2b;
+}
+
 .ctwa-banner__btn {
   appearance: none;
   border: none;
@@ -164,6 +202,160 @@
 }
 
 .ctwa-banner__btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Overlay Pipedrive (distinct de WhatsApp) */
+.ctwa-pd-banner {
+  margin-top: 8px;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #017737;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  color: #1a3d2e;
+  box-shadow: 0 2px 10px rgba(1, 119, 55, 0.18);
+}
+
+.ctwa-pd-banner__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #017737 0%, #015c2b 100%);
+  color: #fff;
+  font-weight: 500;
+}
+
+.ctwa-pd-banner__title {
+  font-size: 13px;
+}
+
+.ctwa-pd-banner__close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ctwa-pd-banner__close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ctwa-pd-banner__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+}
+
+.ctwa-pd-banner__row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ctwa-pd-banner__row + .ctwa-pd-banner__row {
+  padding-top: 12px;
+  border-top: 1px solid #e0ebe4;
+}
+
+.ctwa-pd-banner__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ctwa-pd-banner__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #017737;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ctwa-pd-banner__value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a3d2e;
+  word-break: break-word;
+}
+
+.ctwa-pd-banner__field .ctwa-pd-banner__value:last-child {
+  font-family: "Roboto Mono", monospace;
+}
+
+.ctwa-pd-banner__field:first-child .ctwa-pd-banner__value {
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+}
+
+.ctwa-pd-banner__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ctwa-pd-banner__mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #1a3d2e;
+}
+
+.ctwa-pd-banner__mode input {
+  accent-color: #017737;
+}
+
+.ctwa-pd-banner__mode input:disabled + *,
+.ctwa-pd-banner__mode:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ctwa-pd-banner__hint {
+  margin: 0;
+  font-size: 12px;
+  color: #4a6b58;
+}
+
+.ctwa-pd-banner__btn {
+  appearance: none;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 16px;
+  margin-top: 6px;
+  background: #017737;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  align-self: flex-start;
+}
+
+.ctwa-pd-banner__btn:hover:not(:disabled) {
+  background: #015c2b;
+}
+
+.ctwa-pd-banner__btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ctwa-pd-banner__btn:disabled {
   opacity: 0.7;
   cursor: wait;
 }
