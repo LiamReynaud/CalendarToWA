@@ -209,6 +209,109 @@ async function openOrReusePipedriveTab(searchQuery) {
   return { tabId, reused, filled };
 }
 
+const MERIDIAN_LEADS_URL = "https://studio.meridian-partner.net/closing/leads";
+
+async function findMeridianTab() {
+  const tabs = await chrome.tabs.query({
+    url: "https://studio.meridian-partner.net/*",
+  });
+  if (tabs.length === 0) return null;
+  tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  return tabs[0];
+}
+
+async function pingMeridianTab(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "CTWA_MERIDIAN_PING",
+    });
+    return response?.pong === true;
+  } catch {
+    return false;
+  }
+}
+
+async function injectMeridianScripts(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content/meridian.js"],
+  });
+}
+
+async function ensureMeridianScript(tabId) {
+  if (await pingMeridianTab(tabId)) return true;
+
+  try {
+    await injectMeridianScripts(tabId);
+  } catch {
+    return false;
+  }
+
+  for (let i = 0; i < 15; i++) {
+    await sleep(200);
+    if (await pingMeridianTab(tabId)) return true;
+  }
+  return false;
+}
+
+async function fillMeridianSearch(tabId, query) {
+  for (let i = 0; i < 4; i++) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: "FILL_MERIDIAN_SEARCH",
+        query,
+      });
+      if (response?.ok) {
+        return { filled: true, opened: response.opened === true };
+      }
+    } catch {
+      /* content script not ready yet */
+    }
+    await sleep(400);
+  }
+  return { filled: false, opened: false };
+}
+
+async function openOrReuseMeridianTab(searchQuery) {
+  const existing = await findMeridianTab();
+  let tabId;
+  let reused = false;
+  const onLeadsPage = existing?.url?.includes("/closing/leads");
+
+  if (existing?.id && onLeadsPage) {
+    tabId = await focusTab(existing);
+    reused = true;
+    await sleep(600);
+  } else if (existing?.id) {
+    tabId = await focusTab(existing);
+    reused = true;
+    await chrome.tabs.update(tabId, { url: MERIDIAN_LEADS_URL });
+    await waitForTabLoad(tabId);
+    await sleep(1200);
+  } else {
+    const tab = await chrome.tabs.create({
+      url: MERIDIAN_LEADS_URL,
+      active: true,
+    });
+    tabId = tab.id;
+    await waitForTabLoad(tabId);
+    await sleep(1500);
+  }
+
+  if (!(await ensureMeridianScript(tabId))) {
+    if (reused) {
+      await reloadAndWait(tabId);
+      await sleep(800);
+    }
+    if (!(await ensureMeridianScript(tabId))) {
+      return { tabId, reused, filled: false };
+    }
+  }
+
+  const searchResult = await fillMeridianSearch(tabId, searchQuery);
+  return { tabId, reused, filled: searchResult.filled, opened: searchResult.opened };
+}
+
 async function openOrReuseWhatsAppTab() {
   const contact = await getPendingContact();
   const existing = await findWhatsAppTab();
@@ -257,15 +360,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       defaultCountryCode = "33",
       enableWhatsApp = true,
       enablePipedrive = false,
+      enableMeridian = false,
     } = message.payload || {};
     chrome.storage.sync.set(
       {
         defaultCountryCode,
         enableWhatsApp,
         enablePipedrive,
+        enableMeridian,
       },
       () => sendResponse({ ok: !chrome.runtime.lastError })
     );
+    return true;
+  }
+
+  if (message.type === "OPEN_MERIDIAN_SEARCH") {
+    const { query } = message.payload || {};
+    openOrReuseMeridianTab(query || "")
+      .then((result) =>
+        sendResponse({
+          ok: result.filled,
+          opened: result.opened === true,
+          ...result,
+        })
+      )
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }
 

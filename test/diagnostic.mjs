@@ -12,7 +12,7 @@ globalThis.window = globalThis;
 const phoneUtilsSrc = readFileSync(join(__dirname, "../lib/phone-utils.js"), "utf8");
 eval(phoneUtilsSrc);
 
-const { extractPhones, normalizeForWhatsApp, extractAttendeeNames, extractPipedriveContacts, extractPipedriveDealName } = globalThis.CalendarToWA;
+const { extractPhones, normalizeForWhatsApp, extractAttendeeNames, extractSuffixFromEvent, extractPipedriveContacts, extractPipedriveDealName } = globalThis.CalendarToWA;
 
 const SAMPLES = {
   ybs_calendly: `Aina Rajaonarivony et Renaud YBS
@@ -75,10 +75,35 @@ const titleSamples = {
   alegria_ferat: "Jean Ferat: 🎦 Appel de découverte",
   ybs_et: "Aina Rajaonarivony et Renaud YBS",
   reunion_only: "Réunion: Point hebdo",
+  entretien_alegria: "Entretien Alegria - Pierre Moulin",
+  entretien_alegria_full: "Entretien Alegria - Christophe Micol",
+  samah_et: "Samah JABALLAH et Renaud Alegria",
+  entretien_alegria_copy: "Entretien Alegria - Aurélie BRUGE OLIKO (copy)",
+  iclosed_skl: "Julie Jones x Onboarding Assistant IA SKL on 14 Jul 2026 with Renaud Degeorges",
+  iclosed_florian: "Florian PELOUS x Onboarding Assistant IA SKL on 15 Jul 2026 with Renaud Degeorges",
 };
 for (const [name, title] of Object.entries(titleSamples)) {
   const names = extractAttendeeNames(title, "");
   console.log(`  ${name}: ${JSON.stringify(names)}`);
+}
+
+console.log("\n=== extractPhones (Meridian one-line) ===\n");
+const meridianDesc = "Téléphone : +33625503454 Email : aurelie.bruge1@gmail.com";
+console.log(
+  `  ${JSON.stringify(extractPhones(meridianDesc, { excludeMeetingDialIn: true, defaultCountryCode: "33" }))}`
+);
+
+console.log("\n=== extractSuffixFromEvent ===\n");
+const suffixSamples = [
+  ["Entretien Alegria - Pierre Moulin", "Téléphone : +33612345678"],
+  ["Karelle Mergez: Appel de découverte", "Renaud de l'équipe Alegria"],
+  ["Aina Rajaonarivony et Renaud YBS", "Numéro :: +33 6 88 04 47 94"],
+  ["visio 2", "Deal: Cris\nContact: Cris, Phone: 33613424420"],
+];
+for (const [title, text] of suffixSamples) {
+  console.log(
+    `  ${JSON.stringify(title)} => ${JSON.stringify(extractSuffixFromEvent(title, text, ["Alegria", "YBS"]))}`
+  );
 }
 
 console.log("\n=== Pipedrive sync (Contact / Phone) ===\n");

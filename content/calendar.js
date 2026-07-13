@@ -7,6 +7,7 @@
     formatDisplay,
     parsePhoneParts,
     extractAttendeeNames,
+    extractSuffixFromEvent,
     extractPipedriveContacts,
     extractPipedriveDealName,
     formatSuffixForWhatsApp,
@@ -16,10 +17,12 @@
   const BANNER_CLASS = "ctwa-banner";
   const WA_BANNER_CLASS = "ctwa-banner--wa";
   const PD_BANNER_CLASS = "ctwa-pd-banner";
+  const MER_BANNER_CLASS = "ctwa-mer-banner";
   const HIDDEN_CLASS = "ctwa-banner--hidden";
   let defaultCountryCode = "33";
   let enableWhatsApp = true;
   let enablePipedrive = false;
+  let enableMeridian = false;
   let openWidget = null;
   let scanPaused = false;
   let cachedSuffixes = { suffixes: [], lastSuffix: "" };
@@ -31,11 +34,13 @@
       lastSuffix: "",
       enableWhatsApp: true,
       enablePipedrive: false,
+      enableMeridian: false,
     },
     (data) => {
       defaultCountryCode = data.defaultCountryCode || "33";
       enableWhatsApp = data.enableWhatsApp !== false;
       enablePipedrive = data.enablePipedrive === true;
+      enableMeridian = data.enableMeridian === true;
       cachedSuffixes = {
         suffixes: data.suffixes || [],
         lastSuffix: data.lastSuffix || "",
@@ -55,6 +60,10 @@
     }
     if (changes.enablePipedrive) {
       enablePipedrive = changes.enablePipedrive.newValue === true;
+      rescanAll();
+    }
+    if (changes.enableMeridian) {
+      enableMeridian = changes.enableMeridian.newValue === true;
       rescanAll();
     }
     if (changes.suffixes || changes.lastSuffix) {
@@ -299,7 +308,7 @@
     for (const el of panel.querySelectorAll("div, p, span, pre")) {
       const t = (el.textContent || "").trim();
       if (t.length < 8 || t.length > 2000) continue;
-      if (/Deal:\s|Contact:.*Phone:|Num[ée]ro\s*:/i.test(t)) {
+      if (/Deal:\s|Contact:.*Phone:|Num[ée]ro\s*:|Phone\s*Number\s*:|T[ée]l[ée]phone\s*:/i.test(t)) {
         if (!best || t.length < best.length) best = t;
       }
     }
@@ -363,6 +372,11 @@
     return extractAttendeeNames(title, text);
   }
 
+  function getEventSuffix(panel) {
+    const { title, text } = extractPanelText(panel);
+    return extractSuffixFromEvent(title, text, cachedSuffixes.suffixes);
+  }
+
   function removeBanner(panel) {
     panel.querySelectorAll(`.${WIDGET_CLASS}`).forEach((el) => el.remove());
     if (openWidget && !document.contains(openWidget)) openWidget = null;
@@ -372,6 +386,7 @@
     document.querySelectorAll(`.${WIDGET_CLASS}`).forEach((widget) => {
       const keepWa = widget === exceptWidget && exceptType === "wa";
       const keepPd = widget === exceptWidget && exceptType === "pd";
+      const keepMer = widget === exceptWidget && exceptType === "mer";
 
       if (!keepWa) {
         widget.querySelector(`.${WA_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
@@ -386,19 +401,28 @@
           .querySelector(".ctwa-trigger--pipedrive")
           ?.setAttribute("aria-expanded", "false");
       }
+
+      if (!keepMer) {
+        widget.querySelector(`.${MER_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
+        widget
+          .querySelector(".ctwa-trigger--meridian")
+          ?.setAttribute("aria-expanded", "false");
+      }
     });
 
     if (openWidget && openWidget !== exceptWidget) openWidget = null;
   }
 
   function toggleOverlay(widget, type) {
-    const isWa = type === "wa";
-    const banner = widget.querySelector(
-      isWa ? `.${WA_BANNER_CLASS}` : `.${PD_BANNER_CLASS}`
-    );
-    const trigger = widget.querySelector(
-      isWa ? ".ctwa-trigger--wa" : ".ctwa-trigger--pipedrive"
-    );
+    const config = {
+      wa: { banner: `.${WA_BANNER_CLASS}`, trigger: ".ctwa-trigger--wa" },
+      pd: { banner: `.${PD_BANNER_CLASS}`, trigger: ".ctwa-trigger--pipedrive" },
+      mer: { banner: `.${MER_BANNER_CLASS}`, trigger: ".ctwa-trigger--meridian" },
+    }[type];
+    if (!config) return;
+
+    const banner = widget.querySelector(config.banner);
+    const trigger = widget.querySelector(config.trigger);
     if (!banner || !trigger) return;
 
     const willOpen = banner.classList.contains(HIDDEN_CLASS);
@@ -644,6 +668,94 @@
     return banner;
   }
 
+  function getMeridianPhoneQuery(phone) {
+    return phone.normalized || phone.raw.replace(/\D/g, "") || phone.display;
+  }
+
+  function getMeridianPhoneRows(panel) {
+    return findPhonesInPanel(panel || getOpenPanel()).map((phone) => ({ phone }));
+  }
+
+  function createMeridianBannerRow(rowData) {
+    const { phone } = rowData;
+    const row = document.createElement("div");
+    row.className = "ctwa-mer-banner__row";
+
+    const phoneField = document.createElement("div");
+    phoneField.className = "ctwa-mer-banner__field";
+    const phoneLabel = document.createElement("span");
+    phoneLabel.className = "ctwa-mer-banner__label";
+    phoneLabel.textContent = "Téléphone";
+    const phoneValue = document.createElement("span");
+    phoneValue.className = "ctwa-mer-banner__value";
+    phoneValue.textContent = phone?.display || phone?.raw || "—";
+    phoneField.append(phoneLabel, phoneValue);
+    row.appendChild(phoneField);
+
+    const searchBtn = document.createElement("button");
+    searchBtn.type = "button";
+    searchBtn.className = "ctwa-mer-banner__btn";
+    searchBtn.textContent = "Rechercher dans Meridian";
+    searchBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMeridianSearch(getMeridianPhoneQuery(phone), searchBtn);
+    });
+    row.appendChild(searchBtn);
+
+    return row;
+  }
+
+  function fillMeridianBanner(banner, panel) {
+    const list = banner.querySelector(".ctwa-mer-banner__list");
+    if (!list) return;
+    list.replaceChildren();
+
+    const rows = getMeridianPhoneRows(panel);
+    if (rows.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "ctwa-mer-banner__hint";
+      empty.textContent = "Aucun numéro détecté dans cet événement.";
+      list.appendChild(empty);
+      return;
+    }
+
+    rows.forEach((rowData) => {
+      list.appendChild(createMeridianBannerRow(rowData));
+    });
+  }
+
+  function createMeridianBanner(panel) {
+    const banner = document.createElement("div");
+    banner.className = `${MER_BANNER_CLASS} ${HIDDEN_CLASS}`;
+    banner.setAttribute("role", "region");
+    banner.setAttribute("aria-label", "Recherche Meridian");
+
+    const header = document.createElement("div");
+    header.className = "ctwa-mer-banner__header";
+    header.innerHTML = `
+      <span class="ctwa-mer-banner__title">Rechercher dans Meridian</span>
+      <button type="button" class="ctwa-mer-banner__close" aria-label="Fermer">×</button>
+    `;
+    banner.appendChild(header);
+
+    header.querySelector(".ctwa-mer-banner__close").addEventListener("click", (e) => {
+      e.stopPropagation();
+      banner.classList.add(HIDDEN_CLASS);
+      banner
+        .closest(`.${WIDGET_CLASS}`)
+        ?.querySelector(".ctwa-trigger--meridian")
+        ?.setAttribute("aria-expanded", "false");
+      openWidget = null;
+    });
+
+    const list = document.createElement("div");
+    list.className = "ctwa-mer-banner__list";
+    banner.appendChild(list);
+
+    fillMeridianBanner(banner, panel);
+    return banner;
+  }
+
   function saveSuffix(suffix) {
     const trimmed = (suffix || "").trim();
     if (!trimmed) return;
@@ -684,7 +796,7 @@
     return select;
   }
 
-  function createPhoneRow(phone, names, suffixes, lastSuffix) {
+  function createPhoneRow(phone, names, suffixes, lastSuffix, detectedSuffix = "") {
     const row = document.createElement("div");
     row.className = "ctwa-banner__row";
 
@@ -724,13 +836,16 @@
     suffixLabel.textContent = "Suffixe → Nom (WhatsApp)";
     form.appendChild(suffixLabel);
 
-    const suffixList = [...new Set([...(suffixes || []), lastSuffix].filter(Boolean))];
+    const suffixList = [
+      ...new Set([detectedSuffix, ...(suffixes || []), lastSuffix].filter(Boolean)),
+    ];
     const suffixOptions = [
       { value: "", label: "— Aucun —" },
       ...suffixList.map((s) => ({ value: s, label: s })),
     ];
     const defaultSuffix =
-      lastSuffix && suffixList.includes(lastSuffix) ? lastSuffix : "";
+      (detectedSuffix && suffixList.includes(detectedSuffix) && detectedSuffix) ||
+      (lastSuffix && suffixList.includes(lastSuffix) ? lastSuffix : "");
     const suffixSelect = buildSelect(suffixOptions, defaultSuffix, "Autre…");
     form.appendChild(suffixSelect);
 
@@ -795,7 +910,11 @@
   }
 
   function createWidget(phones, panel, suffixes, lastSuffix, options = {}) {
-    const { showWhatsApp = true, showPipedrive = false } = options;
+    const {
+      showWhatsApp = true,
+      showPipedrive = false,
+      showMeridian = false,
+    } = options;
     const widget = document.createElement("div");
     widget.className = WIDGET_CLASS;
 
@@ -819,6 +938,10 @@
       triggers.appendChild(createPipedriveTrigger(widget, panel));
     }
 
+    if (showMeridian) {
+      triggers.appendChild(createMeridianTrigger(widget, panel));
+    }
+
     widget.appendChild(triggers);
 
     if (showWhatsApp && phones.length > 0 && waTrigger) {
@@ -828,6 +951,7 @@
       banner.setAttribute("aria-label", "Contacts WhatsApp détectés");
 
       const names = getAttendeeNames(panel);
+      const detectedSuffix = getEventSuffix(panel);
 
       const header = document.createElement("div");
       header.className = "ctwa-banner__header";
@@ -854,7 +978,9 @@
       const list = document.createElement("div");
       list.className = "ctwa-banner__list";
       phones.forEach((phone) => {
-        list.appendChild(createPhoneRow(phone, names, suffixes, lastSuffix));
+        list.appendChild(
+          createPhoneRow(phone, names, suffixes, lastSuffix, detectedSuffix)
+        );
       });
       banner.appendChild(list);
       widget.appendChild(banner);
@@ -869,7 +995,112 @@
       widget.appendChild(createPipedriveBanner(panel));
     }
 
+    if (showMeridian) {
+      widget.appendChild(createMeridianBanner(panel));
+    }
+
     return widget;
+  }
+
+  function openMeridianSearch(query, btn) {
+    const trimmed = (query || "").trim();
+    if (!trimmed) {
+      if (btn) {
+        btn.textContent = "Aucun numéro détecté";
+        setTimeout(() => {
+          btn.textContent = "Rechercher dans Meridian";
+        }, 2000);
+      }
+      return;
+    }
+
+    scanPaused = true;
+    if (btn) {
+      btn.disabled = true;
+      if (btn.classList.contains("ctwa-mer-banner__btn")) {
+        btn.textContent = "Ouverture…";
+      } else {
+        btn.title = "Ouverture…";
+      }
+    }
+
+    chrome.runtime.sendMessage(
+      {
+        type: "OPEN_MERIDIAN_SEARCH",
+        payload: { query: trimmed },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          if (btn) {
+            btn.disabled = false;
+            if (btn.classList.contains("ctwa-mer-banner__btn")) {
+              btn.textContent = "Erreur — réessayer";
+            } else {
+              btn.title = "Erreur — réessayer";
+            }
+            setTimeout(() => {
+              if (btn.classList.contains("ctwa-mer-banner__btn")) {
+                btn.textContent = "Rechercher dans Meridian";
+              } else {
+                btn.title = "Rechercher dans Meridian";
+              }
+            }, 2000);
+          }
+          scanPaused = false;
+          return;
+        }
+
+        if (btn) {
+          if (btn.classList.contains("ctwa-mer-banner__btn")) {
+            btn.textContent = response?.opened
+              ? "Fiche lead ouverte ✓"
+              : response?.ok
+                ? "Recherche lancée ✓"
+                : "Champ introuvable";
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.textContent = "Rechercher dans Meridian";
+              scanPaused = false;
+            }, 1500);
+          } else {
+            btn.title = response?.opened
+              ? "Fiche lead Meridian ✓"
+              : response?.ok
+                ? "Recherche Meridian ✓"
+                : "Meridian ouvert — champ introuvable";
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.title = "Rechercher dans Meridian";
+              scanPaused = false;
+            }, 1500);
+          }
+        } else {
+          setTimeout(() => {
+            scanPaused = false;
+          }, 1500);
+        }
+      }
+    );
+  }
+
+  function createMeridianTrigger(widget, panel) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ctwa-trigger ctwa-trigger--meridian";
+    btn.setAttribute("aria-label", "Rechercher dans Meridian");
+    btn.setAttribute("aria-expanded", "false");
+    btn.title = "Rechercher dans Meridian";
+    btn.textContent = "M";
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const merBanner = widget.querySelector(`.${MER_BANNER_CLASS}`);
+      if (merBanner) fillMeridianBanner(merBanner, getOpenPanel() || panel);
+      toggleOverlay(widget, "mer");
+    });
+
+    return btn;
   }
 
   function openPipedriveSearch(query, btn) {
@@ -992,22 +1223,31 @@
   }
 
   function injectBanner(panel) {
-    if (!panel || panel.querySelector(`.${WIDGET_CLASS}`)) return;
-    if (!enableWhatsApp && !enablePipedrive) return;
+    if (!panel) return;
+    if (!enableWhatsApp && !enablePipedrive && !enableMeridian) {
+      removeBanner(panel);
+      return;
+    }
 
     const phones = findPhonesInPanel(panel);
     const hasPipedriveData = panelHasPipedriveData(panel);
     const showWhatsApp = enableWhatsApp && phones.length > 0;
     const showPipedrive = enablePipedrive && (phones.length > 0 || hasPipedriveData);
+    const showMeridian = enableMeridian && phones.length > 0;
 
-    if (!showWhatsApp && !showPipedrive) return;
+    if (!showWhatsApp && !showPipedrive && !showMeridian) {
+      removeBanner(panel);
+      return;
+    }
+
+    if (panel.querySelector(`.${WIDGET_CLASS}`)) return;
 
     const widget = createWidget(
       phones,
       panel,
       cachedSuffixes.suffixes,
       cachedSuffixes.lastSuffix,
-      { showWhatsApp, showPipedrive }
+      { showWhatsApp, showPipedrive, showMeridian }
     );
 
     const anchor =
@@ -1026,10 +1266,11 @@
     if (scanPaused) return;
 
     const panel = getOpenPanel();
-    if (!panel) {
-      removeAllWidgets();
-      return;
-    }
+    document.querySelectorAll(`.${WIDGET_CLASS}`).forEach((widget) => {
+      if (!panel || !panel.contains(widget)) widget.remove();
+    });
+
+    if (!panel) return;
 
     injectBanner(panel);
   }

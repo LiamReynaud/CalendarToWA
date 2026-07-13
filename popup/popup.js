@@ -1,6 +1,7 @@
 const countryInput = document.getElementById("countryCode");
 const enableWhatsAppInput = document.getElementById("enableWhatsApp");
 const enablePipedriveInput = document.getElementById("enablePipedrive");
+const enableMeridianInput = document.getElementById("enableMeridian");
 
 let settingsLoaded = false;
 let lastSavedCountryCode = "33";
@@ -14,6 +15,7 @@ function readSettings() {
     defaultCountryCode,
     enableWhatsApp: enableWhatsAppInput.checked,
     enablePipedrive: enablePipedriveInput.checked,
+    enableMeridian: enableMeridianInput.checked,
   };
 }
 
@@ -34,18 +36,21 @@ chrome.storage.sync.get(
     defaultCountryCode: "33",
     enableWhatsApp: true,
     enablePipedrive: false,
+    enableMeridian: false,
   },
   (data) => {
     lastSavedCountryCode = data.defaultCountryCode || "33";
     countryInput.value = lastSavedCountryCode;
     enableWhatsAppInput.checked = data.enableWhatsApp !== false;
     enablePipedriveInput.checked = data.enablePipedrive === true;
+    enableMeridianInput.checked = data.enableMeridian === true;
     settingsLoaded = true;
   }
 );
 
 enableWhatsAppInput.addEventListener("change", saveSettings);
 enablePipedriveInput.addEventListener("change", saveSettings);
+enableMeridianInput.addEventListener("change", saveSettings);
 countryInput.addEventListener("blur", saveSettings);
 
 window.addEventListener("pagehide", saveSettings);
