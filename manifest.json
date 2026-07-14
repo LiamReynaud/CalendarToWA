@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Calendar to WhatsApp",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Détecte les numéros de téléphone dans Google Calendar et propose de créer un contact sur WhatsApp Web.",
   "permissions": [
     "storage",

@@ -198,15 +198,92 @@
     return "";
   }
 
-  function formatEventDateTime(date, startTime) {
-    if (!date && !startTime) return "";
-    if (date && startTime) {
-      const startOnly =
-        startTime.match(/^(\d{1,2}:\d{2})/)?.[1] ||
-        startTime.match(/De\s+(\d{1,2}:\d{2})/i)?.[1];
-      return startOnly ? `${date} — ${startOnly}` : `${date} — ${startTime}`;
+  function normalizeStartTime(timeStr) {
+    if (!timeStr) return "";
+    const trimmed = String(timeStr).trim();
+    const ampm = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (ampm) {
+      let hour = parseInt(ampm[1], 10);
+      const minute = ampm[2];
+      if (ampm[3].toUpperCase() === "PM" && hour < 12) hour += 12;
+      if (ampm[3].toUpperCase() === "AM" && hour === 12) hour = 0;
+      return `${String(hour).padStart(2, "0")}:${minute}`;
     }
-    return date || startTime;
+    return (
+      trimmed.match(/De\s+(\d{1,2}:\d{2})/i)?.[1] ||
+      trimmed.match(/^(\d{1,2}:\d{2})/)?.[1] ||
+      trimmed
+    );
+  }
+
+  function extractDateTimeHintsFromText(text) {
+    let date = "";
+    let startTime = "";
+    if (!text || typeof text !== "string") return { date, startTime };
+
+    const monthsFr =
+      "janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre";
+    const monthsEn =
+      "january|february|march|april|may|june|july|august|september|october|november|december";
+    const monthsShort = "jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec";
+
+    const datePatterns = [
+      new RegExp(
+        `(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)[\\s,]*\\d{1,2}\\s+(?:${monthsFr})(?:\\s+\\d{4})?`,
+        "i"
+      ),
+      new RegExp(
+        `(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[\\s,]*\\d{1,2}\\s+(?:${monthsEn})(?:\\s+\\d{4})?`,
+        "i"
+      ),
+      new RegExp(`\\d{1,2}\\s+(?:${monthsShort})[a-z]*\\.?\\s+\\d{4}`, "i"),
+      /\d{1,2}\/\d{1,2}\/\d{4}/,
+      new RegExp(`on\\s+(\\d{1,2}\\s+(?:${monthsShort})[a-z]*\\.?\\s+\\d{4})`, "i"),
+      /scheduled for\s+(\d{1,2}\s+[A-Za-z]{3,9}\.?\s+\d{4})/i,
+    ];
+
+    for (const pattern of datePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        date = (match[1] || match[0]).trim();
+        break;
+      }
+    }
+
+    const timePatterns = [
+      /(?:⋅|,|\s)De\s+(\d{1,2}:\d{2})\s+à\s+\d{1,2}:\d{2}/i,
+      /From\s+(\d{1,2}:\d{2})\s*(AM|PM)?\s+to/i,
+      /scheduled for\s+\d{1,2}\s+\w+\s+\d{4}\s+at\s+(\d{1,2}:\d{2})/i,
+      /\bat\s+(\d{1,2}:\d{2})\s*(?:-\s*Europe|$|\()/i,
+      /(\d{1,2}:\d{2})\s*(AM|PM)\s*[–—-]/i,
+      /(\d{1,2}:\d{2})\s*[–—-]\s*\d{1,2}:\d{2}/,
+    ];
+
+    for (const pattern of timePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        startTime = match[2] && /^[AP]M$/i.test(match[2])
+          ? `${match[1]} ${match[2]}`
+          : match[1];
+        break;
+      }
+    }
+
+    if (date && !/\d{4}/.test(date)) {
+      const yearMatch =
+        text.match(/\bon\s+\d{1,2}\s+\w+\s+(\d{4})\b/i) ||
+        text.match(/scheduled for\s+\d{1,2}\s+\w+\s+(\d{4})/i);
+      if (yearMatch) date = `${date} ${yearMatch[1]}`;
+    }
+
+    return { date, startTime };
+  }
+
+  function formatEventDateTime(date, startTime) {
+    const d = (date || "").trim();
+    const t = normalizeStartTime(startTime);
+    if (d && t) return `${d} — ${t}`;
+    return d || t || "";
   }
 
   function extractEventDateTime(panel) {
@@ -241,35 +318,16 @@
       }
     }
 
-    const months =
-      "janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre";
-    const dateRe = new RegExp(
-      `(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)?\\s*\\d{1,2}\\s+(?:${months})(?:\\s+\\d{4})?`,
-      "i"
-    );
-    const timeRangeRe = /\d{1,2}:\d{2}\s*[–—-]\s*\d{1,2}:\d{2}/;
-    const timeFrRe = /De\s+(\d{1,2}:\d{2})\s+à\s+\d{1,2}:\d{2}/i;
-
     if (!date || !startTime) {
       for (const scope of scopes) {
         for (const el of scope.querySelectorAll(
           "div, span, button, time, input, [datetime]"
         )) {
           const text = readPanelFieldValue(el);
-          if (!text || text.length > 120) continue;
-          if (!date) {
-            const dateMatch =
-              text.match(dateRe) || text.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
-            if (dateMatch) date = dateMatch[0].trim();
-          }
-          if (!startTime) {
-            const frMatch = text.match(timeFrRe);
-            if (frMatch) startTime = frMatch[1];
-            else {
-              const timeMatch = text.match(timeRangeRe);
-              if (timeMatch) startTime = timeMatch[0].trim();
-            }
-          }
+          if (!text || text.length > 160) continue;
+          const hints = extractDateTimeHintsFromText(text);
+          if (!date && hints.date) date = hints.date;
+          if (!startTime && hints.startTime) startTime = hints.startTime;
           if (date && startTime) break;
         }
         if (date && startTime) break;
@@ -286,6 +344,13 @@
           break;
         }
       }
+    }
+
+    if (!date || !startTime) {
+      const { title, text } = extractPanelText(panel);
+      const hints = extractDateTimeHintsFromText([title, text].filter(Boolean).join("\n"));
+      if (!date) date = hints.date;
+      if (!startTime) startTime = hints.startTime;
     }
 
     return formatEventDateTime(date, startTime);

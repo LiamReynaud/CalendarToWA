@@ -1,6 +1,6 @@
 {
   "name": "calendar-to-wa",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Extension Chrome — Google Calendar → WhatsApp Web",
   "private": true,
   "license": "MIT",
