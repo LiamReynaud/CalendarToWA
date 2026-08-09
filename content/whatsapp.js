@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_ID = "1.13.0-wa";
+  const SCRIPT_ID = "1.14.0-wa";
   if (window.__CTWA_WA_SCRIPT__ === SCRIPT_ID) return;
   window.__CTWA_WA_SCRIPT__ = SCRIPT_ID;
 
@@ -1096,7 +1096,10 @@
   }
 
   function contactEventDateLabel(contact) {
-    return contact.eventDate ? `RDV : ${contact.eventDate}` : "";
+    const normalized = window.CalendarToWA?.normalizeEventDateLabel?.(
+      contact.eventDate || ""
+    );
+    return normalized ? `RDV : ${normalized}` : "";
   }
 
   function applyOverlayPosition(card) {
@@ -1163,6 +1166,7 @@
           <p class="ctwa-overlay__step"></p>
           <p class="ctwa-overlay__status"></p>
           <p class="ctwa-overlay__event-date"></p>
+          <p class="ctwa-overlay__meet-link"></p>
           <p class="ctwa-overlay__details"></p>
           <div class="ctwa-overlay__actions">
             <button type="button" class="ctwa-overlay__btn ctwa-overlay__btn--primary" data-action="retry">
@@ -1209,6 +1213,21 @@
     const eventDateLabel = contactEventDateLabel(contact);
     eventDateEl.textContent = eventDateLabel;
     eventDateEl.hidden = !eventDateLabel;
+
+    let meetEl = overlayEl.querySelector(".ctwa-overlay__meet-link");
+    if (!meetEl) {
+      meetEl = document.createElement("p");
+      meetEl.className = "ctwa-overlay__meet-link";
+      eventDateEl.insertAdjacentElement("afterend", meetEl);
+    }
+    if (contact.meetUrl) {
+      meetEl.innerHTML = `Visio : <a href="${contact.meetUrl}" target="_blank" rel="noopener noreferrer">${contact.meetUrl.replace(/^https:\/\//, "")}</a>`;
+      meetEl.hidden = false;
+    } else {
+      meetEl.textContent = "";
+      meetEl.hidden = true;
+    }
+
     overlayEl.querySelector(".ctwa-overlay__details").textContent =
       contactSummary(contact);
     overlayEl.classList.toggle("ctwa-overlay--error", isError);

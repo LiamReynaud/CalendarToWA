@@ -1,0 +1,221 @@
+.ctwa-mer-lead-wa {
+  position: relative;
+  z-index: 1000;
+  display: block;
+  clear: both;
+  margin-top: 6px;
+  overflow: visible;
+}
+
+.ctwa-mer-lead-wa--full {
+  padding-top: 4px;
+}
+
+.ctwa-mer-lead-wa__triggers {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctwa-mer-lead-wa .ctwa-trigger {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: background 0.15s, transform 0.1s;
+  position: relative;
+  z-index: 1;
+}
+
+.ctwa-mer-lead-wa .ctwa-trigger:hover {
+  background: #1da851;
+}
+
+.ctwa-mer-lead-wa .ctwa-trigger:active {
+  transform: scale(0.95);
+}
+
+.ctwa-mer-wa-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  height: 36px;
+  max-width: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition:
+    max-width 0.25s ease,
+    padding 0.25s ease,
+    background 0.15s,
+    transform 0.1s;
+  position: relative;
+  z-index: 1;
+}
+
+.ctwa-mer-wa-btn:hover,
+.ctwa-mer-wa-btn:focus-visible {
+  max-width: 280px;
+  padding-right: 14px;
+  background: #1da851;
+}
+
+.ctwa-mer-wa-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.ctwa-mer-wa-btn:disabled {
+  opacity: 0.85;
+  cursor: wait;
+}
+
+.ctwa-mer-wa-btn__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.ctwa-mer-wa-btn__label {
+  white-space: nowrap;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease 0.05s;
+}
+
+.ctwa-mer-wa-btn:hover .ctwa-mer-wa-btn__label,
+.ctwa-mer-wa-btn:focus-visible .ctwa-mer-wa-btn__label,
+.ctwa-mer-wa-btn--loading .ctwa-mer-wa-btn__label {
+  opacity: 1;
+}
+
+.ctwa-mer-wa-btn--loading {
+  max-width: 280px;
+  padding-right: 14px;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+  border: 1px solid #a5d6a7;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  color: #1b5e20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ctwa-mer-lead-wa .ctwa-banner--popover {
+  margin-top: 0;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+}
+
+.ctwa-mer-lead-wa .ctwa-banner--hidden {
+  display: none;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__title {
+  font-weight: 500;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #2e7d32;
+  font-size: 20px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__close:hover {
+  background: rgba(46, 125, 50, 0.12);
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__phone {
+  display: block;
+  font-family: "Roboto Mono", monospace;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__input,
+.ctwa-mer-lead-wa .ctwa-banner__select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #a5d6a7;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__btn {
+  appearance: none;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 16px;
+  margin-top: 4px;
+  background: #25d366;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__btn:hover:not(:disabled) {
+  background: #1da851;
+}
+
+.ctwa-mer-lead-wa .ctwa-banner__btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}

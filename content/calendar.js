@@ -9,19 +9,24 @@
     extractAttendeeNames,
     extractSuffixFromEvent,
     extractPipedriveContacts,
-    extractPipedriveDealName,
+    extractTalentedCloserUrl,
+    extractMeetUrl,
+    normalizeMeetUrl,
     formatSuffixForWhatsApp,
+    isRelativeDateLabel,
+    resolveRelativeDateLabel,
+    formatDateFromIso,
+    formatTimeFromIso,
   } = window.CalendarToWA;
 
   const WIDGET_CLASS = "ctwa-widget";
   const BANNER_CLASS = "ctwa-banner";
   const WA_BANNER_CLASS = "ctwa-banner--wa";
-  const PD_BANNER_CLASS = "ctwa-pd-banner";
   const MER_BANNER_CLASS = "ctwa-mer-banner";
   const HIDDEN_CLASS = "ctwa-banner--hidden";
   let defaultCountryCode = "33";
   let enableWhatsApp = true;
-  let enablePipedrive = false;
+  let enableTalentedCloser = false;
   let enableMeridian = false;
   let openWidget = null;
   let scanPaused = false;
@@ -33,13 +38,14 @@
       suffixes: [],
       lastSuffix: "",
       enableWhatsApp: true,
-      enablePipedrive: false,
+      enableTalentedCloser: false,
       enableMeridian: false,
     },
     (data) => {
       defaultCountryCode = data.defaultCountryCode || "33";
       enableWhatsApp = data.enableWhatsApp !== false;
-      enablePipedrive = data.enablePipedrive === true;
+      enableTalentedCloser =
+        data.enableTalentedCloser === true || data.enablePipedrive === true;
       enableMeridian = data.enableMeridian === true;
       cachedSuffixes = {
         suffixes: data.suffixes || [],
@@ -58,8 +64,8 @@
       enableWhatsApp = changes.enableWhatsApp.newValue !== false;
       rescanAll();
     }
-    if (changes.enablePipedrive) {
-      enablePipedrive = changes.enablePipedrive.newValue === true;
+    if (changes.enableTalentedCloser) {
+      enableTalentedCloser = changes.enableTalentedCloser.newValue === true;
       rescanAll();
     }
     if (changes.enableMeridian) {
@@ -280,10 +286,36 @@
   }
 
   function formatEventDateTime(date, startTime) {
-    const d = (date || "").trim();
+    let d = String(date || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(d)) {
+      d = formatDateFromIso(d);
+    } else if (isRelativeDateLabel(d)) {
+      d = resolveRelativeDateLabel(d);
+    }
     const t = normalizeStartTime(startTime);
     if (d && t) return `${d} — ${t}`;
     return d || t || "";
+  }
+
+  function extractIsoDateTimeFromScopes(scopes) {
+    for (const scope of scopes) {
+      for (const el of scope.querySelectorAll("time[datetime], [datetime]") || []) {
+        const iso = el.getAttribute("datetime");
+        if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) continue;
+        const date = formatDateFromIso(iso);
+        if (date) {
+          return { date, startTime: formatTimeFromIso(iso) };
+        }
+      }
+
+      const dataDateEl = scope.querySelector("[data-date]");
+      const dataDate = dataDateEl?.getAttribute("data-date");
+      if (dataDate && /^\d{4}-\d{2}-\d{2}/.test(dataDate)) {
+        const date = formatDateFromIso(dataDate);
+        if (date) return { date, startTime: "" };
+      }
+    }
+    return { date: "", startTime: "" };
   }
 
   function extractEventDateTime(panel) {
@@ -302,10 +334,19 @@
     let date = "";
     let startTime = "";
 
+    const isoHints = extractIsoDateTimeFromScopes(scopes);
+    if (isoHints.date) date = isoHints.date;
+    if (isoHints.startTime) startTime = isoHints.startTime;
+
     for (const scope of scopes) {
-      if (!date) date = pickPanelField(scope, dateLabels);
-      if (!startTime) startTime = pickPanelField(scope, startLabels);
-      if (date && startTime) break;
+      const fieldDate = pickPanelField(scope, dateLabels);
+      const fieldStartTime = pickPanelField(scope, startLabels);
+      if (fieldDate && !date) date = fieldDate;
+      else if (fieldDate && isRelativeDateLabel(date) && !isoHints.date) {
+        date = fieldDate;
+      }
+      if (!startTime && fieldStartTime) startTime = fieldStartTime;
+      if (date && startTime && !isRelativeDateLabel(date)) break;
     }
 
     if (!startTime) {
@@ -327,6 +368,7 @@
           if (!text || text.length > 160) continue;
           const hints = extractDateTimeHintsFromText(text);
           if (!date && hints.date) date = hints.date;
+          else if (hints.date && isRelativeDateLabel(date)) date = hints.date;
           if (!startTime && hints.startTime) startTime = hints.startTime;
           if (date && startTime) break;
         }
@@ -339,8 +381,9 @@
         const dated = scope.querySelector("[data-date], time[datetime]");
         const raw =
           dated?.getAttribute("data-date") || dated?.getAttribute("datetime");
-        if (raw) {
-          date = raw;
+        if (raw && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+          date = formatDateFromIso(raw);
+          if (!startTime) startTime = formatTimeFromIso(raw);
           break;
         }
       }
@@ -427,9 +470,18 @@
     });
   }
 
-  function panelHasPipedriveData(panel) {
+  function extractTalentedCloserUrlFromPanel(panel) {
+    if (!panel) return "";
+
+    for (const link of panel.querySelectorAll(
+      'a[href*="talentedclosers.com/crm/leads/"]'
+    )) {
+      const url = extractTalentedCloserUrl(link.getAttribute("href") || "");
+      if (url) return url;
+    }
+
     const { text } = extractPanelText(panel);
-    return extractPipedriveContacts(text).some((c) => c.dealName || c.phoneRaw);
+    return extractTalentedCloserUrl(text);
   }
 
   function getAttendeeNames(panel) {
@@ -450,20 +502,12 @@
   function closeAllOverlays(exceptWidget, exceptType) {
     document.querySelectorAll(`.${WIDGET_CLASS}`).forEach((widget) => {
       const keepWa = widget === exceptWidget && exceptType === "wa";
-      const keepPd = widget === exceptWidget && exceptType === "pd";
       const keepMer = widget === exceptWidget && exceptType === "mer";
 
       if (!keepWa) {
         widget.querySelector(`.${WA_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
         widget
           .querySelector(".ctwa-trigger--wa")
-          ?.setAttribute("aria-expanded", "false");
-      }
-
-      if (!keepPd) {
-        widget.querySelector(`.${PD_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
-        widget
-          .querySelector(".ctwa-trigger--pipedrive")
           ?.setAttribute("aria-expanded", "false");
       }
 
@@ -481,7 +525,6 @@
   function toggleOverlay(widget, type) {
     const config = {
       wa: { banner: `.${WA_BANNER_CLASS}`, trigger: ".ctwa-trigger--wa" },
-      pd: { banner: `.${PD_BANNER_CLASS}`, trigger: ".ctwa-trigger--pipedrive" },
       mer: { banner: `.${MER_BANNER_CLASS}`, trigger: ".ctwa-trigger--meridian" },
     }[type];
     if (!config) return;
@@ -509,229 +552,6 @@
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
       <path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 0 0 .609.609l4.458-1.495A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.387 0-4.592-.832-6.323-2.22l-.448-.372-2.605.872.872-2.538-.39-.453A9.969 9.969 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
     </svg>`;
-
-  function extractPanelTelPhones(panel) {
-    if (!panel) return [];
-    const found = [];
-    const seen = new Set();
-
-    panel.querySelectorAll('a[href^="tel:"]').forEach((link) => {
-      const href = link.getAttribute("href") || "";
-      const raw = href.replace(/^tel:/i, "").split(/[;,?]/)[0].trim();
-      const digits = raw.replace(/\D/g, "");
-      if (digits.length < 9 || seen.has(digits)) return;
-      seen.add(digits);
-      found.push(raw || digits);
-    });
-
-    return found;
-  }
-
-  function mergePhoneResult(existing, fallbackRaw) {
-    if (existing) return existing;
-    if (!fallbackRaw) return null;
-    return phoneResultFromRaw(fallbackRaw);
-  }
-
-  function getPipedriveContactRows(panel) {
-    const activePanel = panel || getOpenPanel();
-    if (!activePanel) return [];
-
-    const attendeeNames = getAttendeeNames(activePanel);
-    const detectedPhones = findPhonesInPanel(activePanel);
-    const telPhones = extractPanelTelPhones(activePanel);
-    const { text } = extractPanelText(activePanel);
-    const pipedriveContacts = extractPipedriveContacts(text);
-
-    const pipedriveNamed = pipedriveContacts.filter(
-      (c) => c.contactName || c.dealName
-    );
-
-    function attachPhone(index, contactPhoneRaw) {
-      const phoneRaw =
-        contactPhoneRaw ||
-        detectedPhones[index]?.raw ||
-        detectedPhones[0]?.raw ||
-        telPhones[index] ||
-        telPhones[0];
-      return mergePhoneResult(
-        contactPhoneRaw ? phoneResultFromRaw(contactPhoneRaw) : null,
-        phoneRaw
-      );
-    }
-
-    function resolveName(index, contactName, dealName) {
-      return (
-        contactName ||
-        dealName ||
-        attendeeNames[index] ||
-        attendeeNames[0] ||
-        ""
-      );
-    }
-
-    if (pipedriveNamed.length) {
-      return pipedriveNamed.map((c, index) => ({
-        name: resolveName(index, c.contactName, c.dealName),
-        phone: attachPhone(index, c.phoneRaw),
-      }));
-    }
-
-    if (detectedPhones.length) {
-      return detectedPhones.map((phone, index) => ({
-        name: attendeeNames[index] || attendeeNames[0] || "",
-        phone,
-      }));
-    }
-
-    const orphanPhone = pipedriveContacts.find((c) => c.phoneRaw)?.phoneRaw;
-    if (orphanPhone || telPhones[0]) {
-      return [
-        {
-          name: attendeeNames[0] || "",
-          phone: attachPhone(0, orphanPhone),
-        },
-      ];
-    }
-
-    return attendeeNames.length
-      ? [{ name: attendeeNames[0], phone: null }]
-      : [];
-  }
-
-  function createPipedriveBannerRow(rowData) {
-    const { name, phone } = rowData;
-    const row = document.createElement("div");
-    row.className = "ctwa-pd-banner__row";
-
-    const nameField = document.createElement("div");
-    nameField.className = "ctwa-pd-banner__field";
-    const nameLabel = document.createElement("span");
-    nameLabel.className = "ctwa-pd-banner__label";
-    nameLabel.textContent = "Nom";
-    const nameValue = document.createElement("span");
-    nameValue.className = "ctwa-pd-banner__value";
-    nameValue.textContent = name || "—";
-    nameField.append(nameLabel, nameValue);
-    row.appendChild(nameField);
-
-    const phoneField = document.createElement("div");
-    phoneField.className = "ctwa-pd-banner__field";
-    const phoneLabel = document.createElement("span");
-    phoneLabel.className = "ctwa-pd-banner__label";
-    phoneLabel.textContent = "Téléphone";
-    const phoneValue = document.createElement("span");
-    phoneValue.className = "ctwa-pd-banner__value";
-    phoneValue.textContent = phone?.display || phone?.raw || "—";
-    phoneField.append(phoneLabel, phoneValue);
-    row.appendChild(phoneField);
-
-    const modeLabel = document.createElement("span");
-    modeLabel.className = "ctwa-pd-banner__label";
-    modeLabel.textContent = "Type de recherche";
-    row.appendChild(modeLabel);
-
-    const modeGroup = document.createElement("div");
-    modeGroup.className = "ctwa-pd-banner__modes";
-
-    const nameRadio = document.createElement("label");
-    nameRadio.className = "ctwa-pd-banner__mode";
-    const nameInput = document.createElement("input");
-    nameInput.type = "radio";
-    nameInput.name = `ctwa-pd-mode-${Math.random().toString(36).slice(2)}`;
-    nameInput.value = "name";
-    nameInput.checked = !!name;
-    nameInput.disabled = !name;
-    nameRadio.appendChild(nameInput);
-    nameRadio.append(" Rechercher par nom");
-
-    const phoneRadio = document.createElement("label");
-    phoneRadio.className = "ctwa-pd-banner__mode";
-    const phoneInput = document.createElement("input");
-    phoneInput.type = "radio";
-    phoneInput.name = nameInput.name;
-    phoneInput.value = "phone";
-    phoneInput.checked = !name && !!phone;
-    phoneInput.disabled = !phone;
-    phoneRadio.appendChild(phoneInput);
-    phoneRadio.append(" Rechercher par téléphone");
-
-    modeGroup.appendChild(nameRadio);
-    modeGroup.appendChild(phoneRadio);
-    row.appendChild(modeGroup);
-
-    const searchBtn = document.createElement("button");
-    searchBtn.type = "button";
-    searchBtn.className = "ctwa-pd-banner__btn";
-    searchBtn.textContent = "Rechercher dans Pipedrive";
-    searchBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const mode = modeGroup.querySelector('input[type="radio"]:checked')?.value;
-      let query = "";
-      if (mode === "phone" && phone) {
-        query = phone.display || phone.raw || phone.normalized;
-      } else if (name) {
-        query = name;
-      } else if (phone) {
-        query = phone.display || phone.raw || phone.normalized;
-      }
-      openPipedriveSearch(query, searchBtn);
-    });
-    row.appendChild(searchBtn);
-
-    return row;
-  }
-
-  function fillPipedriveBanner(banner, panel) {
-    const list = banner.querySelector(".ctwa-pd-banner__list");
-    if (!list) return;
-    list.replaceChildren();
-
-    const rows = getPipedriveContactRows(panel);
-    if (rows.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "ctwa-pd-banner__hint";
-      empty.textContent = "Aucun nom ou numéro détecté dans cet événement.";
-      list.appendChild(empty);
-      return;
-    }
-
-    rows.forEach((rowData) => {
-      list.appendChild(createPipedriveBannerRow(rowData));
-    });
-  }
-
-  function createPipedriveBanner(panel) {
-    const banner = document.createElement("div");
-    banner.className = `${PD_BANNER_CLASS} ${HIDDEN_CLASS}`;
-    banner.setAttribute("role", "region");
-    banner.setAttribute("aria-label", "Recherche Pipedrive");
-
-    const header = document.createElement("div");
-    header.className = "ctwa-pd-banner__header";
-    header.innerHTML = `
-      <span class="ctwa-pd-banner__title">Rechercher dans Pipedrive</span>
-      <button type="button" class="ctwa-pd-banner__close" aria-label="Fermer">×</button>
-    `;
-    banner.appendChild(header);
-
-    header.querySelector(".ctwa-pd-banner__close").addEventListener("click", (e) => {
-      e.stopPropagation();
-      banner.classList.add(HIDDEN_CLASS);
-      banner
-        .closest(`.${WIDGET_CLASS}`)
-        ?.querySelector(".ctwa-trigger--pipedrive")
-        ?.setAttribute("aria-expanded", "false");
-      openWidget = null;
-    });
-
-    const list = document.createElement("div");
-    list.className = "ctwa-pd-banner__list";
-    banner.appendChild(list);
-
-    fillPipedriveBanner(banner, panel);
-    return banner;
-  }
 
   function getMeridianPhoneQuery(phone) {
     return phone.normalized || phone.raw.replace(/\D/g, "") || phone.display;
@@ -861,7 +681,47 @@
     return select;
   }
 
-  function createPhoneRow(phone, names, suffixes, lastSuffix, detectedSuffix = "") {
+  function extractMeetUrlFromPanel(panel) {
+    if (!panel) return "";
+
+    for (const link of panel.querySelectorAll('a[href*="meet.google.com"]')) {
+      const url = extractMeetUrl(link.getAttribute("href") || link.textContent || "");
+      if (url) return url;
+    }
+
+    const location = pickPanelField(panel, ["Lieu", "Location"]);
+    const fromLocation = extractMeetUrl(location);
+    if (fromLocation) return fromLocation;
+
+    const { text } = extractPanelText(panel);
+    return extractMeetUrl(text);
+  }
+
+  function appendMeetLinkField(form, meetUrl) {
+    if (!meetUrl) return;
+
+    const meetLabel = document.createElement("span");
+    meetLabel.className = "ctwa-banner__label";
+    meetLabel.textContent = "Visio Meet";
+    form.appendChild(meetLabel);
+
+    const meetLink = document.createElement("a");
+    meetLink.className = "ctwa-banner__meet-link";
+    meetLink.href = meetUrl;
+    meetLink.target = "_blank";
+    meetLink.rel = "noopener noreferrer";
+    meetLink.textContent = meetUrl.replace(/^https:\/\//, "");
+    form.appendChild(meetLink);
+  }
+
+  function createPhoneRow(
+    phone,
+    names,
+    suffixes,
+    lastSuffix,
+    detectedSuffix = "",
+    meetUrl = ""
+  ) {
     const row = document.createElement("div");
     row.className = "ctwa-banner__row";
 
@@ -925,6 +785,8 @@
       suffixCustom.hidden = suffixSelect.value !== "__custom__";
     });
 
+    appendMeetLinkField(form, meetUrl);
+
     const waBtn = document.createElement("button");
     waBtn.type = "button";
     waBtn.className = "ctwa-banner__btn";
@@ -964,6 +826,7 @@
           lastName: formatSuffixForWhatsApp(suffixRaw),
           searchNames: names,
           eventDate,
+          meetUrl,
         },
         waBtn
       );
@@ -977,7 +840,8 @@
   function createWidget(phones, panel, suffixes, lastSuffix, options = {}) {
     const {
       showWhatsApp = true,
-      showPipedrive = false,
+      showTalentedCloser = false,
+      tcUrl = "",
       showMeridian = false,
     } = options;
     const widget = document.createElement("div");
@@ -999,8 +863,8 @@
       triggers.appendChild(waTrigger);
     }
 
-    if (showPipedrive) {
-      triggers.appendChild(createPipedriveTrigger(widget, panel));
+    if (showTalentedCloser && tcUrl) {
+      triggers.appendChild(createTalentedCloserTrigger(tcUrl));
     }
 
     if (showMeridian) {
@@ -1040,11 +904,13 @@
         banner.appendChild(hint);
       }
 
+      const meetUrl = extractMeetUrlFromPanel(panel);
+
       const list = document.createElement("div");
       list.className = "ctwa-banner__list";
       phones.forEach((phone) => {
         list.appendChild(
-          createPhoneRow(phone, names, suffixes, lastSuffix, detectedSuffix)
+          createPhoneRow(phone, names, suffixes, lastSuffix, detectedSuffix, meetUrl)
         );
       });
       banner.appendChild(list);
@@ -1054,10 +920,6 @@
         e.stopPropagation();
         toggleOverlay(widget, "wa");
       });
-    }
-
-    if (showPipedrive) {
-      widget.appendChild(createPipedriveBanner(panel));
     }
 
     if (showMeridian) {
@@ -1168,18 +1030,7 @@
     return btn;
   }
 
-  function openPipedriveSearch(query, btn) {
-    const trimmed = (query || "").trim();
-    if (!trimmed) {
-      if (btn) {
-        btn.textContent = "Rien à rechercher";
-        setTimeout(() => {
-          btn.textContent = "Rechercher dans Pipedrive";
-        }, 2000);
-      }
-      return;
-    }
-
+  function openTalentedCloser(url, btn) {
     scanPaused = true;
     if (btn) {
       btn.disabled = true;
@@ -1188,8 +1039,8 @@
 
     chrome.runtime.sendMessage(
       {
-        type: "OPEN_PIPEDRIVE_SEARCH",
-        payload: { query: trimmed },
+        type: "OPEN_TALENTED_CLOSER",
+        payload: { url },
       },
       (response) => {
         if (chrome.runtime.lastError) {
@@ -1197,31 +1048,22 @@
             btn.disabled = false;
             btn.title = "Erreur — réessayer";
             setTimeout(() => {
-              btn.title = "Rechercher dans Pipedrive";
+              btn.title = "Ouvrir Talented Closer";
+              scanPaused = false;
             }, 2000);
+          } else {
+            scanPaused = false;
           }
-          scanPaused = false;
           return;
         }
 
         if (btn) {
-          if (btn.classList.contains("ctwa-pd-banner__btn")) {
-            btn.textContent = response?.ok ? "Recherche lancée ✓" : "Champ introuvable";
-            setTimeout(() => {
-              btn.disabled = false;
-              btn.textContent = "Rechercher dans Pipedrive";
-              scanPaused = false;
-            }, 1500);
-          } else {
-            btn.title = response?.ok
-              ? "Recherche Pipedrive ✓"
-              : "Pipedrive ouvert — champ introuvable";
-            setTimeout(() => {
-              btn.disabled = false;
-              btn.title = "Rechercher dans Pipedrive";
-              scanPaused = false;
-            }, 1500);
-          }
+          btn.title = response?.ok ? "Fiche TC ouverte ✓" : "Erreur — réessayer";
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.title = "Ouvrir Talented Closer";
+            scanPaused = false;
+          }, 1500);
         } else {
           setTimeout(() => {
             scanPaused = false;
@@ -1231,16 +1073,15 @@
     );
   }
 
-  function createPipedriveTrigger(widget, panel) {
+  function createTalentedCloserTrigger(tcUrl) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "ctwa-trigger ctwa-trigger--pipedrive";
-    btn.setAttribute("aria-label", "Rechercher dans Pipedrive");
-    btn.setAttribute("aria-expanded", "false");
-    btn.title = "Rechercher dans Pipedrive";
+    btn.className = "ctwa-trigger ctwa-trigger--tc";
+    btn.setAttribute("aria-label", "Ouvrir la fiche Talented Closer");
+    btn.title = "Ouvrir Talented Closer";
 
     const icon = document.createElement("img");
-    icon.src = chrome.runtime.getURL("icons/pipedrive.png");
+    icon.src = chrome.runtime.getURL("icons/talented-closer.png");
     icon.alt = "";
     icon.width = 20;
     icon.height = 20;
@@ -1249,11 +1090,8 @@
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
-      const pdBanner = widget.querySelector(`.${PD_BANNER_CLASS}`);
-      if (pdBanner) fillPipedriveBanner(pdBanner, getOpenPanel() || panel);
-      toggleOverlay(widget, "pd");
+      openTalentedCloser(tcUrl, btn);
     });
-
     return btn;
   }
 
@@ -1289,18 +1127,18 @@
 
   function injectBanner(panel) {
     if (!panel) return;
-    if (!enableWhatsApp && !enablePipedrive && !enableMeridian) {
+    if (!enableWhatsApp && !enableTalentedCloser && !enableMeridian) {
       removeBanner(panel);
       return;
     }
 
     const phones = findPhonesInPanel(panel);
-    const hasPipedriveData = panelHasPipedriveData(panel);
+    const tcUrl = extractTalentedCloserUrlFromPanel(panel);
     const showWhatsApp = enableWhatsApp && phones.length > 0;
-    const showPipedrive = enablePipedrive && (phones.length > 0 || hasPipedriveData);
+    const showTalentedCloser = enableTalentedCloser && !!tcUrl;
     const showMeridian = enableMeridian && phones.length > 0;
 
-    if (!showWhatsApp && !showPipedrive && !showMeridian) {
+    if (!showWhatsApp && !showTalentedCloser && !showMeridian) {
       removeBanner(panel);
       return;
     }
@@ -1312,7 +1150,7 @@
       panel,
       cachedSuffixes.suffixes,
       cachedSuffixes.lastSuffix,
-      { showWhatsApp, showPipedrive, showMeridian }
+      { showWhatsApp, showTalentedCloser, tcUrl, showMeridian }
     );
 
     const anchor =

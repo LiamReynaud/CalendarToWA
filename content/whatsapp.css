@@ -80,6 +80,26 @@
   display: none;
 }
 
+.ctwa-overlay__meet-link {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ctwa-overlay__meet-link a {
+  color: #1a73e8;
+  word-break: break-all;
+  text-decoration: none;
+}
+
+.ctwa-overlay__meet-link a:hover {
+  text-decoration: underline;
+}
+
+.ctwa-overlay__meet-link[hidden] {
+  display: none;
+}
+
 .ctwa-overlay__details {
   margin: 0 0 16px;
   font-size: 13px;

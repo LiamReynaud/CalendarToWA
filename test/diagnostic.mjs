@@ -12,7 +12,7 @@ globalThis.window = globalThis;
 const phoneUtilsSrc = readFileSync(join(__dirname, "../lib/phone-utils.js"), "utf8");
 eval(phoneUtilsSrc);
 
-const { extractPhones, normalizeForWhatsApp, extractAttendeeNames, extractSuffixFromEvent, extractPipedriveContacts, extractPipedriveDealName } = globalThis.CalendarToWA;
+const { extractPhones, normalizeForWhatsApp, extractAttendeeNames, extractSuffixFromEvent, extractPipedriveContacts, extractPipedriveDealName, extractTalentedCloserUrl, extractMeetUrl } = globalThis.CalendarToWA;
 
 const SAMPLES = {
   ybs_calendly: `Aina Rajaonarivony et Renaud YBS
@@ -32,6 +32,13 @@ Sans numéro de contact`,
 Deal: Cris
 Participants:
 Contact: Cris, Phone: 33613424420`,
+
+  talentedCloser: `Marie Martin — Rappel
+Suivi Talented Closers
+Lead : Marie Martin
+Tél : +33 6 12 34 56 78
+Visio : https://meet.google.com/abc-defg-hij
+Fiche : https://talentedclosers.com/crm/leads/45821955`,
 };
 
 console.log("=== extractPhones (excludeMeetingDialIn: true) ===\n");
@@ -113,3 +120,11 @@ console.log(`  names: ${JSON.stringify(extractAttendeeNames("visio 2", pd))}`);
 console.log(`  pipedrive: ${JSON.stringify(extractPipedriveContacts(pd))}`);
 console.log(`  deal name: ${JSON.stringify(extractPipedriveDealName(pd))}`);
 console.log(`  widget would show: ${extractPhones(pd, { excludeMeetingDialIn: true, defaultCountryCode: "33" }).length > 0 ? "YES" : "NO"}`);
+
+console.log("\n=== Talented Closer URL ===\n");
+const tc = SAMPLES.talentedCloser;
+console.log(`  url: ${JSON.stringify(extractTalentedCloserUrl(tc))}`);
+console.log(`  TC button would show: ${extractTalentedCloserUrl(tc) ? "YES" : "NO"}`);
+
+console.log("\n=== Google Meet URL ===\n");
+console.log(`  meet: ${JSON.stringify(extractMeetUrl(tc))}`);

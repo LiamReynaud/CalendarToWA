@@ -112,101 +112,51 @@ async function triggerAutomation(tabId, contact) {
   return false;
 }
 
-async function findPipedriveTab() {
-  const tabs = await chrome.tabs.query({ url: "https://*.pipedrive.com/*" });
-  if (tabs.length === 0) return null;
+const TC_URL_PATTERN = "https://talentedclosers.com/crm/*";
+
+function normalizeTalentedCloserUrl(raw) {
+  const trimmed = (raw || "").trim().replace(/[)\]>.,;]+$/, "");
+  const match = trimmed.match(
+    /^https?:\/\/(?:www\.)?talentedclosers\.com\/crm\/leads\/(\d+)/i
+  );
+  if (!match) return "";
+  return `https://talentedclosers.com/crm/leads/${match[1]}`;
+}
+
+async function findTalentedCloserTab() {
+  const tabs = await chrome.tabs.query({ url: TC_URL_PATTERN });
+  if (tabs.length === 0) {
+    const broader = await chrome.tabs.query({
+      url: "https://talentedclosers.com/*",
+    });
+    if (broader.length === 0) return null;
+    broader.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+    return broader[0];
+  }
   tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
   return tabs[0];
 }
 
-async function pingPipedriveTab(tabId) {
-  try {
-    const response = await chrome.tabs.sendMessage(tabId, {
-      type: "CTWA_PIPEDRIVE_PING",
-    });
-    return response?.pong === true;
-  } catch {
-    return false;
-  }
-}
+async function openOrReuseTalentedCloserTab(targetUrl) {
+  const url = normalizeTalentedCloserUrl(targetUrl);
+  if (!url) return { ok: false, error: "invalid_url" };
 
-async function injectPipedriveScripts(tabId) {
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ["content/pipedrive.js"],
-  });
-}
-
-async function ensurePipedriveScript(tabId) {
-  if (await pingPipedriveTab(tabId)) return true;
-
-  try {
-    await injectPipedriveScripts(tabId);
-  } catch {
-    return false;
-  }
-
-  for (let i = 0; i < 15; i++) {
-    await sleep(200);
-    if (await pingPipedriveTab(tabId)) return true;
-  }
-  return false;
-}
-
-async function fillPipedriveSearch(tabId, query) {
-  for (let i = 0; i < 12; i++) {
-    try {
-      const response = await chrome.tabs.sendMessage(tabId, {
-        type: "FILL_PIPEDRIVE_SEARCH",
-        query,
-      });
-      if (response?.ok) return true;
-    } catch {
-      await sleep(300);
-    }
-  }
-  return false;
-}
-
-async function openOrReusePipedriveTab(searchQuery) {
-  const existing = await findPipedriveTab();
+  const existing = await findTalentedCloserTab();
   let tabId;
   let reused = false;
 
   if (existing?.id) {
     tabId = await focusTab(existing);
     reused = true;
-    await sleep(600);
+    await chrome.tabs.update(tabId, { url, active: true });
+    await waitForTabLoad(tabId);
   } else {
-    const tab = await chrome.tabs.create({
-      url: "https://app.pipedrive.com/",
-      active: true,
-    });
+    const tab = await chrome.tabs.create({ url, active: true });
     tabId = tab.id;
     await waitForTabLoad(tabId);
-    await sleep(1500);
   }
 
-  if (!(await ensurePipedriveScript(tabId))) {
-    if (reused) {
-      await reloadAndWait(tabId);
-      await sleep(800);
-    }
-    if (!(await ensurePipedriveScript(tabId))) {
-      return { tabId, reused, filled: false };
-    }
-  }
-
-  const filled = await fillPipedriveSearch(tabId, searchQuery);
-  if (!filled && reused) {
-    await sleep(800);
-    return {
-      tabId,
-      reused,
-      filled: await fillPipedriveSearch(tabId, searchQuery),
-    };
-  }
-  return { tabId, reused, filled };
+  return { ok: true, tabId, reused, url };
 }
 
 const MERIDIAN_LEADS_URL = "https://studio.meridian-partner.net/closing/leads";
@@ -232,9 +182,13 @@ async function pingMeridianTab(tabId) {
 }
 
 async function injectMeridianScripts(tabId) {
+  await chrome.scripting.insertCSS({
+    target: { tabId },
+    files: ["content/meridian.css"],
+  });
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["content/meridian.js"],
+    files: ["lib/phone-utils.js", "content/meridian.js"],
   });
 }
 
@@ -255,7 +209,7 @@ async function ensureMeridianScript(tabId) {
 }
 
 async function fillMeridianSearch(tabId, query) {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     try {
       const response = await chrome.tabs.sendMessage(tabId, {
         type: "FILL_MERIDIAN_SEARCH",
@@ -264,10 +218,13 @@ async function fillMeridianSearch(tabId, query) {
       if (response?.ok) {
         return { filled: true, opened: response.opened === true };
       }
+      if (response?.reason && response.reason !== "error") {
+        break;
+      }
     } catch {
       /* content script not ready yet */
     }
-    await sleep(400);
+    if (i < 5) await sleep(120);
   }
   return { filled: false, opened: false };
 }
@@ -276,18 +233,13 @@ async function openOrReuseMeridianTab(searchQuery) {
   const existing = await findMeridianTab();
   let tabId;
   let reused = false;
-  const onLeadsPage = existing?.url?.includes("/closing/leads");
 
-  if (existing?.id && onLeadsPage) {
+  if (existing?.id) {
     tabId = await focusTab(existing);
     reused = true;
-    await sleep(600);
-  } else if (existing?.id) {
-    tabId = await focusTab(existing);
-    reused = true;
-    await chrome.tabs.update(tabId, { url: MERIDIAN_LEADS_URL });
-    await waitForTabLoad(tabId);
-    await sleep(1200);
+    if (!(await pingMeridianTab(tabId))) {
+      await sleep(150);
+    }
   } else {
     const tab = await chrome.tabs.create({
       url: MERIDIAN_LEADS_URL,
@@ -295,13 +247,13 @@ async function openOrReuseMeridianTab(searchQuery) {
     });
     tabId = tab.id;
     await waitForTabLoad(tabId);
-    await sleep(1500);
+    await sleep(400);
   }
 
   if (!(await ensureMeridianScript(tabId))) {
     if (reused) {
       await reloadAndWait(tabId);
-      await sleep(800);
+      await sleep(300);
     }
     if (!(await ensureMeridianScript(tabId))) {
       return { tabId, reused, filled: false };
@@ -309,6 +261,16 @@ async function openOrReuseMeridianTab(searchQuery) {
   }
 
   const searchResult = await fillMeridianSearch(tabId, searchQuery);
+  if (!searchResult.filled && reused) {
+    await sleep(200);
+    const retry = await fillMeridianSearch(tabId, searchQuery);
+    return {
+      tabId,
+      reused,
+      filled: retry.filled,
+      opened: retry.opened,
+    };
+  }
   return { tabId, reused, filled: searchResult.filled, opened: searchResult.opened };
 }
 
@@ -359,15 +321,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const {
       defaultCountryCode = "33",
       enableWhatsApp = true,
-      enablePipedrive = false,
+      enableTalentedCloser = false,
       enableMeridian = false,
+      enableMeridianWhatsApp = false,
+      enableTalentedCloserWhatsApp = false,
     } = message.payload || {};
     chrome.storage.sync.set(
       {
         defaultCountryCode,
         enableWhatsApp,
-        enablePipedrive,
+        enableTalentedCloser,
         enableMeridian,
+        enableMeridianWhatsApp,
+        enableTalentedCloserWhatsApp,
       },
       () => sendResponse({ ok: !chrome.runtime.lastError })
     );
@@ -388,10 +354,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === "OPEN_PIPEDRIVE_SEARCH") {
-    const { query } = message.payload || {};
-    openOrReusePipedriveTab(query || "")
-      .then((result) => sendResponse({ ok: result.filled, ...result }))
+  if (message.type === "OPEN_TALENTED_CLOSER") {
+    const { url } = message.payload || {};
+    openOrReuseTalentedCloserTab(url || "")
+      .then((result) => sendResponse(result))
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }
@@ -406,6 +372,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       nationalNumber,
       searchNames,
       eventDate,
+      meetUrl,
     } = message.payload;
 
     chrome.storage.local.set(
@@ -419,6 +386,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           nationalNumber: nationalNumber || "",
           searchNames: searchNames || [],
           eventDate: eventDate || "",
+          meetUrl: meetUrl || "",
           awaitingTrigger: true,
           createdAt: Date.now(),
         },

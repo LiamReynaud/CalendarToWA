@@ -1,0 +1,79 @@
+.ctwa-tc-lead-wa {
+  position: relative;
+  z-index: 1000;
+  display: block;
+  clear: both;
+  margin-top: 6px;
+  overflow: visible;
+}
+
+.ctwa-tc-wa-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  height: 36px;
+  max-width: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition:
+    max-width 0.25s ease,
+    padding 0.25s ease,
+    background 0.15s,
+    transform 0.1s;
+  position: relative;
+  z-index: 1;
+}
+
+.ctwa-tc-wa-btn:hover,
+.ctwa-tc-wa-btn:focus-visible {
+  max-width: 280px;
+  padding-right: 14px;
+  background: #1da851;
+}
+
+.ctwa-tc-wa-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.ctwa-tc-wa-btn:disabled {
+  opacity: 0.85;
+  cursor: wait;
+}
+
+.ctwa-tc-wa-btn__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.ctwa-tc-wa-btn__label {
+  white-space: nowrap;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease 0.05s;
+}
+
+.ctwa-tc-wa-btn:hover .ctwa-tc-wa-btn__label,
+.ctwa-tc-wa-btn:focus-visible .ctwa-tc-wa-btn__label,
+.ctwa-tc-wa-btn--loading .ctwa-tc-wa-btn__label {
+  opacity: 1;
+}
+
+.ctwa-tc-wa-btn--loading {
+  max-width: 280px;
+  padding-right: 14px;
+}
