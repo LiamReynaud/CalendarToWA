@@ -5,5 +5,8 @@
 node_modules/
 dist/
 .playwright-mcp/
+test/.wa-profile/
+test/.mer-profile/
+test/.ghl-profile/
 .env.chrome-store
 .venv-compose/

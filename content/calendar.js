@@ -22,12 +22,16 @@
   const WIDGET_CLASS = "ctwa-widget";
   const BANNER_CLASS = "ctwa-banner";
   const WA_BANNER_CLASS = "ctwa-banner--wa";
+  const ONOFF_BANNER_CLASS = "ctwa-banner--onoff";
   const MER_BANNER_CLASS = "ctwa-mer-banner";
+  const GHL_BANNER_CLASS = "ctwa-ghl-banner";
   const HIDDEN_CLASS = "ctwa-banner--hidden";
   let defaultCountryCode = "33";
   let enableWhatsApp = true;
   let enableTalentedCloser = false;
   let enableMeridian = false;
+  let enableGhl = false;
+  let enableOnoff = false;
   let openWidget = null;
   let scanPaused = false;
   let cachedSuffixes = { suffixes: [], lastSuffix: "" };
@@ -40,6 +44,8 @@
       enableWhatsApp: true,
       enableTalentedCloser: false,
       enableMeridian: false,
+      enableGhl: false,
+      enableOnoff: false,
     },
     (data) => {
       defaultCountryCode = data.defaultCountryCode || "33";
@@ -47,6 +53,8 @@
       enableTalentedCloser =
         data.enableTalentedCloser === true || data.enablePipedrive === true;
       enableMeridian = data.enableMeridian === true;
+      enableGhl = data.enableGhl === true;
+      enableOnoff = data.enableOnoff === true;
       cachedSuffixes = {
         suffixes: data.suffixes || [],
         lastSuffix: data.lastSuffix || "",
@@ -70,6 +78,14 @@
     }
     if (changes.enableMeridian) {
       enableMeridian = changes.enableMeridian.newValue === true;
+      rescanAll();
+    }
+    if (changes.enableGhl) {
+      enableGhl = changes.enableGhl.newValue === true;
+      rescanAll();
+    }
+    if (changes.enableOnoff) {
+      enableOnoff = changes.enableOnoff.newValue === true;
       rescanAll();
     }
     if (changes.suffixes || changes.lastSuffix) {
@@ -502,7 +518,9 @@
   function closeAllOverlays(exceptWidget, exceptType) {
     document.querySelectorAll(`.${WIDGET_CLASS}`).forEach((widget) => {
       const keepWa = widget === exceptWidget && exceptType === "wa";
+      const keepOnoff = widget === exceptWidget && exceptType === "onoff";
       const keepMer = widget === exceptWidget && exceptType === "mer";
+      const keepGhl = widget === exceptWidget && exceptType === "ghl";
 
       if (!keepWa) {
         widget.querySelector(`.${WA_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
@@ -511,10 +529,24 @@
           ?.setAttribute("aria-expanded", "false");
       }
 
+      if (!keepOnoff) {
+        widget.querySelector(`.${ONOFF_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
+        widget
+          .querySelector(".ctwa-trigger--onoff")
+          ?.setAttribute("aria-expanded", "false");
+      }
+
       if (!keepMer) {
         widget.querySelector(`.${MER_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
         widget
           .querySelector(".ctwa-trigger--meridian")
+          ?.setAttribute("aria-expanded", "false");
+      }
+
+      if (!keepGhl) {
+        widget.querySelector(`.${GHL_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
+        widget
+          .querySelector(".ctwa-trigger--ghl")
           ?.setAttribute("aria-expanded", "false");
       }
     });
@@ -525,7 +557,9 @@
   function toggleOverlay(widget, type) {
     const config = {
       wa: { banner: `.${WA_BANNER_CLASS}`, trigger: ".ctwa-trigger--wa" },
+      onoff: { banner: `.${ONOFF_BANNER_CLASS}`, trigger: ".ctwa-trigger--onoff" },
       mer: { banner: `.${MER_BANNER_CLASS}`, trigger: ".ctwa-trigger--meridian" },
+      ghl: { banner: `.${GHL_BANNER_CLASS}`, trigger: ".ctwa-trigger--ghl" },
     }[type];
     if (!config) return;
 
@@ -641,6 +675,94 @@
     return banner;
   }
 
+  function getGhlPhoneQuery(phone) {
+    return phone.normalized || phone.raw.replace(/\D/g, "") || phone.display;
+  }
+
+  function getGhlPhoneRows(panel) {
+    return findPhonesInPanel(panel || getOpenPanel()).map((phone) => ({ phone }));
+  }
+
+  function createGhlBannerRow(rowData) {
+    const { phone } = rowData;
+    const row = document.createElement("div");
+    row.className = "ctwa-ghl-banner__row";
+
+    const phoneField = document.createElement("div");
+    phoneField.className = "ctwa-ghl-banner__field";
+    const phoneLabel = document.createElement("span");
+    phoneLabel.className = "ctwa-ghl-banner__label";
+    phoneLabel.textContent = "Téléphone";
+    const phoneValue = document.createElement("span");
+    phoneValue.className = "ctwa-ghl-banner__value";
+    phoneValue.textContent = phone?.display || phone?.raw || "—";
+    phoneField.append(phoneLabel, phoneValue);
+    row.appendChild(phoneField);
+
+    const searchBtn = document.createElement("button");
+    searchBtn.type = "button";
+    searchBtn.className = "ctwa-ghl-banner__btn";
+    searchBtn.textContent = "Rechercher dans GHL";
+    searchBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openGhlSearch(getGhlPhoneQuery(phone), searchBtn);
+    });
+    row.appendChild(searchBtn);
+
+    return row;
+  }
+
+  function fillGhlBanner(banner, panel) {
+    const list = banner.querySelector(".ctwa-ghl-banner__list");
+    if (!list) return;
+    list.replaceChildren();
+
+    const rows = getGhlPhoneRows(panel);
+    if (rows.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "ctwa-ghl-banner__hint";
+      empty.textContent = "Aucun numéro détecté dans cet événement.";
+      list.appendChild(empty);
+      return;
+    }
+
+    rows.forEach((rowData) => {
+      list.appendChild(createGhlBannerRow(rowData));
+    });
+  }
+
+  function createGhlBanner(panel) {
+    const banner = document.createElement("div");
+    banner.className = `${GHL_BANNER_CLASS} ${HIDDEN_CLASS}`;
+    banner.setAttribute("role", "region");
+    banner.setAttribute("aria-label", "Recherche GoHighLevel");
+
+    const header = document.createElement("div");
+    header.className = "ctwa-ghl-banner__header";
+    header.innerHTML = `
+      <span class="ctwa-ghl-banner__title">Rechercher dans GHL</span>
+      <button type="button" class="ctwa-ghl-banner__close" aria-label="Fermer">×</button>
+    `;
+    banner.appendChild(header);
+
+    header.querySelector(".ctwa-ghl-banner__close").addEventListener("click", (e) => {
+      e.stopPropagation();
+      banner.classList.add(HIDDEN_CLASS);
+      banner
+        .closest(`.${WIDGET_CLASS}`)
+        ?.querySelector(".ctwa-trigger--ghl")
+        ?.setAttribute("aria-expanded", "false");
+      openWidget = null;
+    });
+
+    const list = document.createElement("div");
+    list.className = "ctwa-ghl-banner__list";
+    banner.appendChild(list);
+
+    fillGhlBanner(banner, panel);
+    return banner;
+  }
+
   function saveSuffix(suffix) {
     const trimmed = (suffix || "").trim();
     if (!trimmed) return;
@@ -720,8 +842,10 @@
     suffixes,
     lastSuffix,
     detectedSuffix = "",
-    meetUrl = ""
+    meetUrl = "",
+    destination = "wa"
   ) {
+    const isOnoff = destination === "onoff";
     const row = document.createElement("div");
     row.className = "ctwa-banner__row";
 
@@ -735,7 +859,7 @@
 
     const nameLabel = document.createElement("label");
     nameLabel.className = "ctwa-banner__label";
-    nameLabel.textContent = "Prénom (WhatsApp)";
+    nameLabel.textContent = isOnoff ? "Nom complet" : "Prénom (WhatsApp)";
     form.appendChild(nameLabel);
 
     const nameOptions = names.map((n) => ({ value: n, label: n }));
@@ -758,7 +882,9 @@
 
     const suffixLabel = document.createElement("label");
     suffixLabel.className = "ctwa-banner__label";
-    suffixLabel.textContent = "Suffixe → Nom (WhatsApp)";
+    suffixLabel.textContent = isOnoff
+      ? "Entreprise (équipe, ex. [YBS])"
+      : "Suffixe → nom WhatsApp";
     form.appendChild(suffixLabel);
 
     const suffixList = [
@@ -787,14 +913,8 @@
 
     appendMeetLinkField(form, meetUrl);
 
-    const waBtn = document.createElement("button");
-    waBtn.type = "button";
-    waBtn.className = "ctwa-banner__btn";
-    waBtn.textContent = "Créer ou ouvrir le contact";
-    waBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-
-      let firstName =
+    function readNameAndSuffix() {
+      let selectedName =
         nameSelect.value === "__custom__"
           ? nameCustom.value.trim()
           : nameSelect.value.trim();
@@ -804,17 +924,37 @@
           ? suffixCustom.value.trim()
           : suffixSelect.value.trim();
 
-      if (!firstName) {
+      if (!selectedName) {
         nameCustom.hidden = false;
         nameCustom.focus();
         nameCustom.placeholder = "Prénom requis";
-        return;
+        return null;
       }
 
       if (suffixRaw) saveSuffix(suffixRaw);
 
       const panel = getOpenPanel();
       const eventDate = extractEventDateTime(panel);
+      const { firstName, lastName } = splitSelectedPersonName(selectedName);
+
+      return {
+        selectedName,
+        suffixRaw,
+        eventDate,
+        firstName,
+        lastName,
+        companyName: formatSuffixForWhatsApp(suffixRaw),
+      };
+    }
+
+    const waBtn = document.createElement("button");
+    waBtn.type = "button";
+    waBtn.className = "ctwa-banner__btn";
+    waBtn.textContent = "Créer ou ouvrir le contact";
+    waBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const data = readNameAndSuffix();
+      if (!data) return;
 
       openWhatsAppContact(
         {
@@ -822,27 +962,131 @@
           rawPhone: phone.raw,
           countryCode: phone.countryCode,
           nationalNumber: phone.nationalNumber,
-          firstName,
-          lastName: formatSuffixForWhatsApp(suffixRaw),
+          firstName: data.selectedName,
+          lastName: formatSuffixForWhatsApp(data.suffixRaw),
           searchNames: names,
-          eventDate,
+          eventDate: data.eventDate,
           meetUrl,
         },
         waBtn
       );
     });
-    form.appendChild(waBtn);
+    if (!isOnoff) form.appendChild(waBtn);
+
+    const onoffBtn = document.createElement("button");
+    onoffBtn.type = "button";
+    onoffBtn.className = "ctwa-banner__btn ctwa-banner__btn--onoff";
+    onoffBtn.textContent = "Créer ou ouvrir sur Onoff";
+    onoffBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const data = readNameAndSuffix();
+      if (!data) return;
+
+      openOnoffContact(
+        {
+          phone: phone.normalized,
+          rawPhone: phone.raw,
+          countryCode: phone.countryCode,
+          nationalNumber: phone.nationalNumber,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          companyName: data.companyName,
+          eventDate: data.eventDate,
+          meetUrl,
+        },
+        onoffBtn
+      );
+    });
+    if (isOnoff) form.appendChild(onoffBtn);
 
     row.appendChild(form);
     return row;
   }
 
+  function splitSelectedPersonName(fullName) {
+    const trimmed = (fullName || "").trim();
+    if (!trimmed) return { firstName: "", lastName: "" };
+    const parts = trimmed.split(/\s+/);
+    if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+    return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+  }
+
+  function appendContactsBanner(widget, options) {
+    const {
+      kind,
+      title,
+      ariaLabel,
+      trigger,
+      phones,
+      panel,
+      suffixes,
+      lastSuffix,
+    } = options;
+
+    const bannerClass = kind === "onoff" ? ONOFF_BANNER_CLASS : WA_BANNER_CLASS;
+    const banner = document.createElement("div");
+    banner.className = `${BANNER_CLASS} ${bannerClass} ${HIDDEN_CLASS}`;
+    banner.setAttribute("role", "region");
+    banner.setAttribute("aria-label", ariaLabel);
+
+    const names = getAttendeeNames(panel);
+    const detectedSuffix = getEventSuffix(panel);
+
+    const header = document.createElement("div");
+    header.className = "ctwa-banner__header";
+    header.innerHTML = `
+      <span class="ctwa-banner__title">${title}</span>
+      <button type="button" class="ctwa-banner__close" aria-label="Fermer">×</button>
+    `;
+    banner.appendChild(header);
+
+    header.querySelector(".ctwa-banner__close").addEventListener("click", (e) => {
+      e.stopPropagation();
+      banner.classList.add(HIDDEN_CLASS);
+      trigger.setAttribute("aria-expanded", "false");
+      openWidget = null;
+    });
+
+    if (names.length > 0) {
+      const hint = document.createElement("p");
+      hint.className = "ctwa-banner__hint";
+      hint.textContent = `${names.length} nom(s) détecté(s) dans la réunion`;
+      banner.appendChild(hint);
+    }
+
+    const meetUrl = extractMeetUrlFromPanel(panel);
+    const list = document.createElement("div");
+    list.className = "ctwa-banner__list";
+    phones.forEach((phone) => {
+      list.appendChild(
+        createPhoneRow(
+          phone,
+          names,
+          suffixes,
+          lastSuffix,
+          detectedSuffix,
+          meetUrl,
+          kind
+        )
+      );
+    });
+    banner.appendChild(list);
+    widget.appendChild(banner);
+
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleOverlay(widget, kind);
+    });
+  }
+
   function createWidget(phones, panel, suffixes, lastSuffix, options = {}) {
     const {
       showWhatsApp = true,
+      showOnoff = false,
       showTalentedCloser = false,
       tcUrl = "",
       showMeridian = false,
+      showGhl = false,
     } = options;
     const widget = document.createElement("div");
     widget.className = WIDGET_CLASS;
@@ -863,6 +1107,25 @@
       triggers.appendChild(waTrigger);
     }
 
+    let onoffTrigger = null;
+    if (showOnoff && phones.length > 0) {
+      onoffTrigger = document.createElement("button");
+      onoffTrigger.type = "button";
+      onoffTrigger.className = "ctwa-trigger ctwa-trigger--onoff";
+      onoffTrigger.setAttribute("aria-label", "Ajouter le contact sur Onoff");
+      onoffTrigger.setAttribute("aria-expanded", "false");
+      onoffTrigger.title = "Ajouter sur Onoff";
+
+      const onoffIcon = document.createElement("img");
+      onoffIcon.src = chrome.runtime.getURL("icons/onoff.png");
+      onoffIcon.alt = "";
+      onoffIcon.width = 20;
+      onoffIcon.height = 20;
+      onoffTrigger.appendChild(onoffIcon);
+
+      triggers.appendChild(onoffTrigger);
+    }
+
     if (showTalentedCloser && tcUrl) {
       triggers.appendChild(createTalentedCloserTrigger(tcUrl));
     }
@@ -871,59 +1134,44 @@
       triggers.appendChild(createMeridianTrigger(widget, panel));
     }
 
+    if (showGhl) {
+      triggers.appendChild(createGhlTrigger(widget, panel));
+    }
+
     widget.appendChild(triggers);
 
-    if (showWhatsApp && phones.length > 0 && waTrigger) {
-      const banner = document.createElement("div");
-      banner.className = `${BANNER_CLASS} ${WA_BANNER_CLASS} ${HIDDEN_CLASS}`;
-      banner.setAttribute("role", "region");
-      banner.setAttribute("aria-label", "Contacts WhatsApp détectés");
-
-      const names = getAttendeeNames(panel);
-      const detectedSuffix = getEventSuffix(panel);
-
-      const header = document.createElement("div");
-      header.className = "ctwa-banner__header";
-      header.innerHTML = `
-      <span class="ctwa-banner__title">Ajouter sur WhatsApp</span>
-      <button type="button" class="ctwa-banner__close" aria-label="Fermer">×</button>
-    `;
-      banner.appendChild(header);
-
-      header.querySelector(".ctwa-banner__close").addEventListener("click", (e) => {
-        e.stopPropagation();
-        banner.classList.add(HIDDEN_CLASS);
-        waTrigger.setAttribute("aria-expanded", "false");
-        openWidget = null;
+    if (showWhatsApp && waTrigger) {
+      appendContactsBanner(widget, {
+        kind: "wa",
+        title: "Ajouter sur WhatsApp",
+        ariaLabel: "Contacts WhatsApp détectés",
+        trigger: waTrigger,
+        phones,
+        panel,
+        suffixes,
+        lastSuffix,
       });
+    }
 
-      if (names.length > 0) {
-        const hint = document.createElement("p");
-        hint.className = "ctwa-banner__hint";
-        hint.textContent = `${names.length} nom(s) détecté(s) dans la réunion`;
-        banner.appendChild(hint);
-      }
-
-      const meetUrl = extractMeetUrlFromPanel(panel);
-
-      const list = document.createElement("div");
-      list.className = "ctwa-banner__list";
-      phones.forEach((phone) => {
-        list.appendChild(
-          createPhoneRow(phone, names, suffixes, lastSuffix, detectedSuffix, meetUrl)
-        );
-      });
-      banner.appendChild(list);
-      widget.appendChild(banner);
-
-      waTrigger.addEventListener("click", (e) => {
-        e.stopPropagation();
-        toggleOverlay(widget, "wa");
+    if (showOnoff && onoffTrigger) {
+      appendContactsBanner(widget, {
+        kind: "onoff",
+        title: "Ajouter sur Onoff",
+        ariaLabel: "Contacts Onoff détectés",
+        trigger: onoffTrigger,
+        phones,
+        panel,
+        suffixes,
+        lastSuffix,
       });
     }
 
     if (showMeridian) {
       widget.appendChild(createMeridianBanner(panel));
+    }
+
+    if (showGhl) {
+      widget.appendChild(createGhlBanner(panel));
     }
 
     return widget;
@@ -1030,6 +1278,107 @@
     return btn;
   }
 
+  function openGhlSearch(query, btn) {
+    const trimmed = (query || "").trim();
+    if (!trimmed) {
+      if (btn) {
+        btn.textContent = "Aucun numéro détecté";
+        setTimeout(() => {
+          btn.textContent = "Rechercher dans GHL";
+        }, 2000);
+      }
+      return;
+    }
+
+    scanPaused = true;
+    if (btn) {
+      btn.disabled = true;
+      if (btn.classList.contains("ctwa-ghl-banner__btn")) {
+        btn.textContent = "Ouverture…";
+      } else {
+        btn.title = "Ouverture…";
+      }
+    }
+
+    chrome.runtime.sendMessage(
+      {
+        type: "OPEN_GHL_SEARCH",
+        payload: { query: trimmed },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          if (btn) {
+            btn.disabled = false;
+            if (btn.classList.contains("ctwa-ghl-banner__btn")) {
+              btn.textContent = "Erreur — réessayer";
+            } else {
+              btn.title = "Erreur — réessayer";
+            }
+            setTimeout(() => {
+              if (btn.classList.contains("ctwa-ghl-banner__btn")) {
+                btn.textContent = "Rechercher dans GHL";
+              } else {
+                btn.title = "Rechercher dans GHL";
+              }
+            }, 2000);
+          }
+          scanPaused = false;
+          return;
+        }
+
+        if (btn) {
+          if (btn.classList.contains("ctwa-ghl-banner__btn")) {
+            btn.textContent = response?.opened
+              ? "Contact ouvert ✓"
+              : response?.ok
+                ? "Recherche lancée ✓"
+                : "Champ introuvable";
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.textContent = "Rechercher dans GHL";
+              scanPaused = false;
+            }, 1500);
+          } else {
+            btn.title = response?.opened
+              ? "Contact GHL ✓"
+              : response?.ok
+                ? "Recherche GHL ✓"
+                : "GHL ouvert — champ introuvable";
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.title = "Rechercher dans GHL";
+              scanPaused = false;
+            }, 1500);
+          }
+        } else {
+          setTimeout(() => {
+            scanPaused = false;
+          }, 1500);
+        }
+      }
+    );
+  }
+
+  function createGhlTrigger(widget, panel) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ctwa-trigger ctwa-trigger--ghl";
+    btn.setAttribute("aria-label", "Rechercher dans GoHighLevel");
+    btn.setAttribute("aria-expanded", "false");
+    btn.title = "Rechercher dans GHL";
+    btn.textContent = "GHL";
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const ghlBanner = widget.querySelector(`.${GHL_BANNER_CLASS}`);
+      if (ghlBanner) fillGhlBanner(ghlBanner, getOpenPanel() || panel);
+      toggleOverlay(widget, "ghl");
+    });
+
+    return btn;
+  }
+
   function openTalentedCloser(url, btn) {
     scanPaused = true;
     if (btn) {
@@ -1125,9 +1474,45 @@
     }, 1500);
   }
 
+  function openOnoffContact(contact, btn) {
+    scanPaused = true;
+    btn.disabled = true;
+    btn.textContent = "Ouverture…";
+
+    try {
+      chrome.runtime.sendMessage({
+        type: "OPEN_ONOFF_CONTACT",
+        payload: contact,
+      });
+    } catch {
+      btn.textContent = "Erreur — réessayer";
+      btn.disabled = false;
+      scanPaused = false;
+      return;
+    }
+
+    btn.textContent = "Onoff ouvert ✓";
+    closeAllOverlays(null, null);
+    const widget = btn.closest(`.${WIDGET_CLASS}`);
+    widget?.querySelector(`.${ONOFF_BANNER_CLASS}`)?.classList.add(HIDDEN_CLASS);
+    widget?.querySelector(".ctwa-trigger--onoff")?.setAttribute("aria-expanded", "false");
+
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = "Créer ou ouvrir sur Onoff";
+      scanPaused = false;
+    }, 1500);
+  }
+
   function injectBanner(panel) {
     if (!panel) return;
-    if (!enableWhatsApp && !enableTalentedCloser && !enableMeridian) {
+    if (
+      !enableWhatsApp &&
+      !enableOnoff &&
+      !enableTalentedCloser &&
+      !enableMeridian &&
+      !enableGhl
+    ) {
       removeBanner(panel);
       return;
     }
@@ -1135,10 +1520,12 @@
     const phones = findPhonesInPanel(panel);
     const tcUrl = extractTalentedCloserUrlFromPanel(panel);
     const showWhatsApp = enableWhatsApp && phones.length > 0;
+    const showOnoff = enableOnoff && phones.length > 0;
     const showTalentedCloser = enableTalentedCloser && !!tcUrl;
     const showMeridian = enableMeridian && phones.length > 0;
+    const showGhl = enableGhl && phones.length > 0;
 
-    if (!showWhatsApp && !showTalentedCloser && !showMeridian) {
+    if (!showWhatsApp && !showOnoff && !showTalentedCloser && !showMeridian && !showGhl) {
       removeBanner(panel);
       return;
     }
@@ -1150,7 +1537,7 @@
       panel,
       cachedSuffixes.suffixes,
       cachedSuffixes.lastSuffix,
-      { showWhatsApp, showTalentedCloser, tcUrl, showMeridian }
+      { showWhatsApp, showOnoff, showTalentedCloser, tcUrl, showMeridian, showGhl }
     );
 
     const anchor =

@@ -2,6 +2,8 @@ const countryInput = document.getElementById("countryCode");
 const enableWhatsAppInput = document.getElementById("enableWhatsApp");
 const enableTalentedCloserInput = document.getElementById("enableTalentedCloser");
 const enableMeridianInput = document.getElementById("enableMeridian");
+const enableGhlInput = document.getElementById("enableGhl");
+const enableOnoffInput = document.getElementById("enableOnoff");
 const enableMeridianWhatsAppInput = document.getElementById("enableMeridianWhatsApp");
 const enableTalentedCloserWhatsAppInput = document.getElementById(
   "enableTalentedCloserWhatsApp"
@@ -20,8 +22,10 @@ function readSettings() {
     enableWhatsApp: enableWhatsAppInput.checked,
     enableTalentedCloser: enableTalentedCloserInput.checked,
     enableMeridian: enableMeridianInput.checked,
+    enableGhl: enableGhlInput.checked,
     enableMeridianWhatsApp: enableMeridianWhatsAppInput.checked,
     enableTalentedCloserWhatsApp: enableTalentedCloserWhatsAppInput.checked,
+    enableOnoff: enableOnoffInput.checked,
   };
 }
 
@@ -43,6 +47,7 @@ chrome.storage.sync.get(
     enableWhatsApp: true,
     enableTalentedCloser: false,
     enableMeridian: false,
+    enableOnoff: false,
   },
   (data) => {
     chrome.storage.sync.get(["enableMeridianWhatsApp", "enableTalentedCloserWhatsApp"], (opts) => {
@@ -54,6 +59,8 @@ chrome.storage.sync.get(
       enableTalentedCloserInput.checked =
         data.enableTalentedCloser === true || data.enablePipedrive === true;
       enableMeridianInput.checked = data.enableMeridian === true;
+      enableGhlInput.checked = data.enableGhl === true;
+      enableOnoffInput.checked = data.enableOnoff === true;
       enableMeridianWhatsAppInput.checked = hasMeridianWaSetting
         ? opts.enableMeridianWhatsApp === true
         : data.enableWhatsApp !== false;
@@ -68,6 +75,8 @@ chrome.storage.sync.get(
 enableWhatsAppInput.addEventListener("change", saveSettings);
 enableTalentedCloserInput.addEventListener("change", saveSettings);
 enableMeridianInput.addEventListener("change", saveSettings);
+enableGhlInput.addEventListener("change", saveSettings);
+enableOnoffInput.addEventListener("change", saveSettings);
 enableMeridianWhatsAppInput.addEventListener("change", saveSettings);
 enableTalentedCloserWhatsAppInput.addEventListener("change", saveSettings);
 countryInput.addEventListener("blur", saveSettings);

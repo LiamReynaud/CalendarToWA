@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_ID = "1.14.0-wa";
+  const SCRIPT_ID = "1.15.0-wa";
   if (window.__CTWA_WA_SCRIPT__ === SCRIPT_ID) return;
   window.__CTWA_WA_SCRIPT__ = SCRIPT_ID;
 
@@ -105,20 +105,33 @@
     return !btn.disabled && btn.getAttribute("aria-disabled") !== "true";
   }
 
+  function resolveClickableButton(el) {
+    if (!el) return null;
+    return (
+      el.closest("button, [role='button'], [tabindex='0']") ||
+      el.parentElement ||
+      el
+    );
+  }
+
   function findNewChatButton() {
-    const byTestId = document.querySelector('[data-testid="new-chat-outline"]');
-    if (byTestId && isVisible(byTestId)) {
-      const btn =
-        byTestId.closest("button, [role='button'], header") ||
-        byTestId.parentElement;
+    const selectors = [
+      '[data-testid="new-chat-outline"]',
+      '[data-testid="new-chat"]',
+      '[data-icon="new-chat-outline"]',
+      '[data-icon="new-chat"]',
+    ];
+
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el || !isVisible(el)) continue;
+      const btn = resolveClickableButton(el);
       if (btn && isButtonEnabled(btn)) return btn;
     }
 
-    const byIcon = document.querySelector('[data-icon="new-chat-outline"]');
-    if (byIcon && isVisible(byIcon)) {
-      const btn =
-        byIcon.closest("button, div[role='button'], div[tabindex]") || byIcon;
-      if (btn && isButtonEnabled(btn)) return btn;
+    for (const sel of ['[aria-label="Nouvelle discussion"]', '[aria-label="New chat"]']) {
+      const btn = document.querySelector(sel);
+      if (btn && isVisible(btn) && isButtonEnabled(btn)) return btn;
     }
 
     return null;
@@ -141,7 +154,9 @@
 
   async function ensureDiscussionsView() {
     const discussionsBtn =
-      findNavButton("Discussions") || findNavButton("Chats");
+      findNavButton("Discussions") ||
+      findNavButton("Chats") ||
+      findNavButton("Conversations");
     if (
       discussionsBtn?.getAttribute("aria-pressed") === "true" &&
       findNewChatButton()
@@ -175,26 +190,59 @@
     return candidates.some((candidate) => phonesMatch(text, candidate));
   }
 
+  function isNewChatSearchInput(el) {
+    if (!el || !isVisible(el)) return false;
+
+    const label = (
+      el.getAttribute("aria-label") ||
+      el.placeholder ||
+      el.getAttribute("aria-placeholder") ||
+      ""
+    ).toLowerCase();
+
+    if (/rechercher.*(nom|num|t[eé]l)/.test(label)) return true;
+    if (/search.*(name|number|phone)/.test(label)) return true;
+
+    return Boolean(
+      el.closest('[data-testid="new-chat-drawer"], [data-testid="chat-list-drawer"]')
+    );
+  }
+
+  function collectChatSearchInputs(root = document) {
+    const found = [];
+    const candidates = root.querySelectorAll(
+      'input[type="text"], input:not([type]), [contenteditable="true"], [role="textbox"]'
+    );
+
+    candidates.forEach((el) => {
+      const input =
+        el.matches('input, [contenteditable="true"], [role="textbox"]')
+          ? el
+          : el.querySelector('input, [contenteditable="true"], [role="textbox"]') ||
+            el;
+      if (!isNewChatSearchInput(input)) return;
+      if (input && isVisible(input) && !found.includes(input)) found.push(input);
+    });
+
+    return found;
+  }
+
+  function isNewChatPanelOpen() {
+    if (getNewChatDrawer()) return true;
+    return collectChatSearchInputs(document).length > 0;
+  }
+
   function findChatSearchInput(preferredQuery) {
-    const selectors = [
-      'input[aria-label="Rechercher un nom ou un numéro"]',
-      'input[aria-label="Search name or number"]',
-      'input[placeholder="Rechercher un nom ou un numéro"]',
-      'input[placeholder="Search name or number"]',
-      '[data-testid="new-chat-drawer"] input[type="text"]',
-      '[data-testid="new-chat-drawer"] [contenteditable="true"]',
-    ];
+    const searchRoot = getNewChatSearchRoot();
+    const roots = searchRoot ? [searchRoot, document] : [document];
     const inputs = [];
-    const drawer = getNewChatDrawer();
-    const roots = drawer ? [drawer, document] : [document];
 
     for (const root of roots) {
-      for (const sel of selectors) {
-        root.querySelectorAll(sel).forEach((el) => {
-          if (isVisible(el) && !inputs.includes(el)) inputs.push(el);
-        });
-      }
+      collectChatSearchInputs(root).forEach((el) => {
+        if (!inputs.includes(el)) inputs.push(el);
+      });
     }
+
     if (!inputs.length) return null;
 
     if (preferredQuery) {
@@ -277,26 +325,40 @@
 
   async function fillChatSearchInput(input, query) {
     if (!input || !query) return;
-    input.focus();
-    await sleep(100);
-    await clearInputField(input);
-    document.execCommand("insertText", false, query);
-    const nativeSetter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value"
-    )?.set;
-    if (!input.isContentEditable && !input.closest?.('[contenteditable="true"]')) {
-      if (nativeSetter) nativeSetter.call(input, query);
-      else input.value = query;
+    await clearAndSetInputValue(input, query);
+
+    const queryDigits = phoneDigits(query);
+    const currentDigits = phoneDigits(getSearchInputDisplayValue(input));
+    if (
+      currentDigits &&
+      (currentDigits === queryDigits ||
+        currentDigits.endsWith(queryDigits) ||
+        queryDigits.endsWith(currentDigits))
+    ) {
+      await sleep(400);
+      return;
     }
-    input.dispatchEvent(
-      new InputEvent("input", {
-        bubbles: true,
-        data: query,
-        inputType: "insertText",
-      })
-    );
-    await sleep(400);
+
+    await clearInputField(input);
+    input.focus();
+    await sleep(80);
+
+    for (const char of query) {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: char, bubbles: true, cancelable: true })
+      );
+      document.execCommand("insertText", false, char);
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          data: char,
+          inputType: "insertText",
+        })
+      );
+      await sleep(25);
+    }
+
+    await sleep(500);
   }
 
   function getSearchInputDisplayValue(input) {
@@ -365,7 +427,12 @@
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean);
-    return lines.find((line) => phoneDigits(line).length >= 9) || lines[0] || "";
+    const fromLines =
+      lines.find((line) => phoneDigits(line).length >= 9) || lines[0] || "";
+    if (fromLines) return fromLines;
+
+    const spanTitle = container.querySelector('span[title], span[dir="auto"]');
+    return (spanTitle?.getAttribute("title") || spanTitle?.textContent || "").trim();
   }
 
   function getNewChatSearchInput(contact) {
@@ -374,14 +441,33 @@
   }
 
   function getNewChatDrawer() {
-    return document.querySelector('[data-testid="new-chat-drawer"]');
+    return (
+      document.querySelector('[data-testid="new-chat-drawer"]') ||
+      document.querySelector('[data-testid="chat-list-drawer"]')
+    );
+  }
+
+  function getNewChatSearchRoot() {
+    const drawer = getNewChatDrawer();
+    if (drawer) return drawer;
+
+    const searchInputs = collectChatSearchInputs(document);
+    if (!searchInputs.length) return null;
+
+    const input = searchInputs[0];
+    return (
+      input.closest('[data-testid*="drawer"]') ||
+      input.closest("aside, section, header") ||
+      document.querySelector("#pane-side") ||
+      document
+    );
   }
 
   function isNewChatSearchActive(contact) {
     const queryDigits = phoneDigits(contact.phone || contact.rawPhone);
     if (queryDigits.length < 9) return false;
 
-    const drawer = getNewChatDrawer();
+    const drawer = getNewChatSearchRoot();
     if (
       drawer &&
       (findPhoneRowInDrawer(drawer, contact) ||
@@ -401,11 +487,28 @@
     );
   }
 
+  function getDrawerSearchRoots(drawer) {
+    const roots = new Set();
+    if (drawer) roots.add(drawer);
+
+    if (isNewChatPanelOpen()) {
+      const paneSide = document.querySelector("#pane-side");
+      if (paneSide) roots.add(paneSide);
+      const searchRoot = getNewChatSearchRoot();
+      if (searchRoot) roots.add(searchRoot);
+    }
+
+    return [...roots];
+  }
+
   function getDrawerSearchRows(drawer) {
-    if (!drawer) return [];
-    return [...drawer.querySelectorAll('[data-testid="cell-frame-container"]')].filter(
-      isVisible
-    );
+    const rows = [];
+    for (const root of getDrawerSearchRoots(drawer)) {
+      root.querySelectorAll('[data-testid="cell-frame-container"]').forEach((el) => {
+        if (isVisible(el) && !rows.includes(el)) rows.push(el);
+      });
+    }
+    return rows;
   }
 
   function findPhoneRowInDrawer(drawer, contact) {
@@ -475,7 +578,7 @@
     const targetDigits = phoneDigits(contact.phone || contact.rawPhone);
     if (targetDigits.length < 9) return null;
 
-    const drawer = getNewChatDrawer();
+    const drawer = getNewChatSearchRoot();
     if (!drawer || !isNewChatSearchActive(contact)) return null;
     if (requireFiltered && !isDrawerSearchFiltered(drawer, contact)) return null;
 
@@ -564,7 +667,7 @@
     showOverlay(contact, "Tentative clavier (↓ + Entrée)…", {
       step: "Étape 3/6 — Ouverture",
     });
-    const drawer = getNewChatDrawer();
+    const drawer = getNewChatSearchRoot();
     if (!drawer || !isDrawerSearchFiltered(drawer, contact)) {
       return false;
     }
@@ -1244,7 +1347,9 @@
       const ready =
         document.querySelector("#pane-side") ||
         document.querySelector('[data-testid="new-chat-outline"]') ||
-        document.querySelector('[data-icon="new-chat-outline"]');
+        document.querySelector('[data-testid="new-chat"]') ||
+        document.querySelector('[data-icon="new-chat-outline"]') ||
+        document.querySelector('[data-icon="new-chat"]');
       if (ready) return true;
       await sleep(POLL_INTERVAL_MS);
     }
@@ -1292,7 +1397,7 @@
     if (!searchResult) {
       automationDone = true;
       const searchInput = getNewChatSearchInput(contact);
-      const drawer = getNewChatDrawer();
+      const drawer = getNewChatSearchRoot();
       const drawerRows = drawer ? getDrawerSearchRows(drawer) : [];
       const visibleRows = drawerRows.length;
       const preview = drawerRows
@@ -1428,6 +1533,7 @@
     }
 
     if (!contact) return;
+    if (contact.destination === "onoff") return;
 
     const age = Date.now() - (contact.createdAt || 0);
     if (age > MAX_AGE_MS) {
@@ -1446,6 +1552,10 @@
     }
 
     if (message.type === "RUN_PENDING_CONTACT") {
+      if (message.contact?.destination === "onoff") {
+        sendResponse({ ok: false, reason: "wrong_destination" });
+        return true;
+      }
       if (automationRunning) {
         sendResponse({ ok: true, status: "already_running" });
         return true;
@@ -1469,6 +1579,7 @@
       });
       const contact = response?.contact;
       if (!contact?.awaitingTrigger) return;
+      if (contact.destination === "onoff") return;
       const age = Date.now() - (contact.createdAt || 0);
       if (age > MAX_AGE_MS) return;
       await processPendingContact({ immediate: true, contact });

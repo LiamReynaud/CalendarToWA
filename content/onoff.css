@@ -1,0 +1,39 @@
+.ctwa-overlay--onoff .ctwa-overlay__step {
+  color: #1e4fd6;
+}
+
+.ctwa-overlay--onoff.ctwa-overlay--error .ctwa-overlay__step {
+  color: #c62828;
+}
+
+.ctwa-overlay--onoff .ctwa-overlay__header strong {
+  color: #1e4fd6;
+}
+
+.ctwa-overlay--onoff .ctwa-overlay__btn--primary {
+  background: #1e4fd6;
+  border-color: #1e4fd6;
+  color: #fff;
+}
+
+.ctwa-overlay--onoff .ctwa-overlay__btn--primary:hover {
+  background: #163ca8;
+}
+
+.ctwa-trigger--onoff {
+  background: #fff;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.ctwa-trigger--onoff img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.ctwa-trigger--onoff:hover {
+  background: #f3f4f6;
+}

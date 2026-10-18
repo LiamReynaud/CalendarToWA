@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Calendar to WhatsApp",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "description": "Détecte les numéros de téléphone dans Google Calendar et propose de créer un contact sur WhatsApp Web.",
   "permissions": [
     "storage",
@@ -13,7 +13,9 @@
     "https://calendar.google.com/*",
     "https://web.whatsapp.com/*",
     "https://talentedclosers.com/*",
-    "https://studio.meridian-partner.net/*"
+    "https://studio.meridian-partner.net/*",
+    "https://phone.onoffbusiness.com/*",
+    "https://app.gohighlevel.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -37,7 +39,8 @@
         "content/calendar.js"
       ],
       "css": [
-        "content/calendar.css"
+        "content/calendar.css",
+        "content/onoff.css"
       ],
       "run_at": "document_idle"
     },
@@ -79,12 +82,40 @@
         "content/meridian.css"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://app.gohighlevel.com/*"
+      ],
+      "js": [
+        "lib/phone-utils.js",
+        "content/ghl.js"
+      ],
+      "css": [
+        "content/ghl.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://phone.onoffbusiness.com/*"
+      ],
+      "js": [
+        "lib/phone-utils.js",
+        "content/onoff.js"
+      ],
+      "css": [
+        "content/whatsapp.css",
+        "content/onoff.css"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [
-        "icons/talented-closer.png"
+        "icons/talented-closer.png",
+        "icons/onoff.png"
       ],
       "matches": [
         "https://calendar.google.com/*"

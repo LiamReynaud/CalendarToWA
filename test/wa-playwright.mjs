@@ -32,13 +32,15 @@ async function main() {
   console.log("WA Web ouvert — connecte-toi si besoin, puis appuie Entrée…");
   await page.waitForTimeout(3000);
 
-  const newChat = page.locator('[data-testid="new-chat-outline"]').first();
+  const newChat = page.locator(
+    '[data-testid="new-chat-outline"], [data-testid="new-chat"], [data-icon="new-chat-outline"], [data-icon="new-chat"]'
+  ).first();
   await newChat.waitFor({ state: "visible", timeout: 120000 });
   await newChat.click();
   await page.waitForTimeout(800);
 
   const search = page.locator(
-    'input[aria-label="Rechercher un nom ou un numéro"], input[aria-label="Search name or number"]'
+    'input[aria-label*="Rechercher"], input[aria-label*="Search"], [role="textbox"][aria-label*="Rechercher"], [role="textbox"][aria-label*="Search"]'
   ).last();
   await search.fill(PHONE);
   await page.waitForTimeout(2000);
