@@ -597,6 +597,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       enableMeridian = false,
       enableGhl = false,
       enableMeridianWhatsApp = false,
+      enableCalendlyWhatsApp = false,
       enableTalentedCloserWhatsApp = false,
       enableOnoff = false,
     } = message.payload || {};
@@ -608,6 +609,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         enableMeridian,
         enableGhl,
         enableMeridianWhatsApp,
+        enableCalendlyWhatsApp,
         enableTalentedCloserWhatsApp,
         enableOnoff,
       },

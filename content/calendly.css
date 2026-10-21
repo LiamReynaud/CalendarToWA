@@ -1,0 +1,11 @@
+/* Calendly : même panneau que Google Calendar (styles dans calendar.css) */
+.ctwa-widget {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 10px 0 12px;
+  box-sizing: border-box;
+  clear: both;
+  position: relative;
+  z-index: 2;
+}

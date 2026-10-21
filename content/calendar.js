@@ -13,6 +13,7 @@
     extractMeetUrl,
     normalizeMeetUrl,
     formatSuffixForWhatsApp,
+    formatPhoneForGhlSearch,
     isRelativeDateLabel,
     resolveRelativeDateLabel,
     formatDateFromIso,
@@ -676,7 +677,7 @@
   }
 
   function getGhlPhoneQuery(phone) {
-    return phone.normalized || phone.raw.replace(/\D/g, "") || phone.display;
+    return formatPhoneForGhlSearch(phone, defaultCountryCode);
   }
 
   function getGhlPhoneRows(panel) {

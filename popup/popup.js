@@ -5,6 +5,7 @@ const enableMeridianInput = document.getElementById("enableMeridian");
 const enableGhlInput = document.getElementById("enableGhl");
 const enableOnoffInput = document.getElementById("enableOnoff");
 const enableMeridianWhatsAppInput = document.getElementById("enableMeridianWhatsApp");
+const enableCalendlyWhatsAppInput = document.getElementById("enableCalendlyWhatsApp");
 const enableTalentedCloserWhatsAppInput = document.getElementById(
   "enableTalentedCloserWhatsApp"
 );
@@ -24,6 +25,7 @@ function readSettings() {
     enableMeridian: enableMeridianInput.checked,
     enableGhl: enableGhlInput.checked,
     enableMeridianWhatsApp: enableMeridianWhatsAppInput.checked,
+    enableCalendlyWhatsApp: enableCalendlyWhatsAppInput.checked,
     enableTalentedCloserWhatsApp: enableTalentedCloserWhatsAppInput.checked,
     enableOnoff: enableOnoffInput.checked,
   };
@@ -50,8 +52,11 @@ chrome.storage.sync.get(
     enableOnoff: false,
   },
   (data) => {
-    chrome.storage.sync.get(["enableMeridianWhatsApp", "enableTalentedCloserWhatsApp"], (opts) => {
+    chrome.storage.sync.get(
+      ["enableMeridianWhatsApp", "enableCalendlyWhatsApp", "enableTalentedCloserWhatsApp"],
+      (opts) => {
       const hasMeridianWaSetting = "enableMeridianWhatsApp" in opts;
+      const hasCalendlyWaSetting = "enableCalendlyWhatsApp" in opts;
       const hasTcWaSetting = "enableTalentedCloserWhatsApp" in opts;
       lastSavedCountryCode = data.defaultCountryCode || "33";
       countryInput.value = lastSavedCountryCode;
@@ -64,11 +69,15 @@ chrome.storage.sync.get(
       enableMeridianWhatsAppInput.checked = hasMeridianWaSetting
         ? opts.enableMeridianWhatsApp === true
         : data.enableWhatsApp !== false;
+      enableCalendlyWhatsAppInput.checked = hasCalendlyWaSetting
+        ? opts.enableCalendlyWhatsApp === true
+        : data.enableWhatsApp !== false;
       enableTalentedCloserWhatsAppInput.checked = hasTcWaSetting
         ? opts.enableTalentedCloserWhatsApp === true
         : data.enableWhatsApp !== false;
       settingsLoaded = true;
-    });
+    }
+    );
   }
 );
 
@@ -78,6 +87,7 @@ enableMeridianInput.addEventListener("change", saveSettings);
 enableGhlInput.addEventListener("change", saveSettings);
 enableOnoffInput.addEventListener("change", saveSettings);
 enableMeridianWhatsAppInput.addEventListener("change", saveSettings);
+enableCalendlyWhatsAppInput.addEventListener("change", saveSettings);
 enableTalentedCloserWhatsAppInput.addEventListener("change", saveSettings);
 countryInput.addEventListener("blur", saveSettings);
 
